@@ -1,0 +1,44 @@
+---
+title: "100-histories"
+output: html_document
+date: "2024-05-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+library("tidyverse")
+```
+
+Christian Denney:
+
+Here is an updated set of data, along with figures after doing a little more QAQC etc. The attached .csv file contains:       
+fish ID      
+age of the fish (according to otolith aging)      
+WY     
+100 day cluster designations (1-4)     
+150 day cluster designations (1-4)     
+descriptive names of those clusters (HS = "high salinity", MS = "medium salinity", LS = "low salinity", FW = "freshwater")     
+a selection column that indicates if the fish falls into your subsampling criteria (WY 2000, 2010, 2016 or 100 day cluster number 4)     
+Additionally, I've included an updated figure showing all the clusters, as well as a version of Panel A with just the selected fish, and then finally, a panel plot of the 150 day clusters plotting calculated salinity instead of Sr isotope ratio.     
+
+Let me know if you have any further questions!    
+
+
+```{r}
+df<-read_csv("Longfin smelt meta and tissues/all_fish_clust_ids.csv")
+
+```
+
+```{r}
+ df %>% filter(WY %in% c("2000","2010","2016","2013")) %>% group_by(clust_name_100) %>% summarize(Count=n())
+```
+
+
+Mean strontium ratio up to day 100? Or mean pratical salinity up to day 100? 
+
+```{r}
+ df %>% filter(WY %in% c("2000","2010","2016","2013")) %>% filter(clust_name_100=="MS")
+```
