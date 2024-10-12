@@ -1,0 +1,18 @@
+---
+title: "101-data"
+output: html_document
+date: "2024-10-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+wget -np -r --cut-dirs 3 http://slimsdata.genomecenter.ucdavis.edu/Data/izi9cfibu/Un_DTSA984/Project_AFSP_LONGFIN_RAD/
+
+Two plates of data, putting in data/raw
+
