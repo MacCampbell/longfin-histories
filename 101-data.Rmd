@@ -16,3 +16,53 @@ wget -np -r --cut-dirs 3 http://slimsdata.genomecenter.ucdavis.edu/Data/izi9cfib
 
 Two plates of data, putting in data/raw
 
+Have demultiplexed.   
+
+`/home/maccamp/longfin-histories/data/raw/plate-1`    
+`/home/maccamp/longfin-histories/data/raw/plate-2`    
+
+```{r}
+m1<-read_csv("meta/samples.csv") %>% mutate(Well=paste0(Row,Column)) %>% select(-Row, -Column)
+barcodes<-read_csv("meta/expected-barcodes.csv")
+m1<-m1 %>% left_join(barcodes) 
+```
+
+Samples are of the form:
+PLATE01_RA_GGAAACATCGTGCAGG.fastq
+
+```{r}
+p1<-m1 %>% filter(Plate==1) %>% mutate(File1=paste0("PLATE0",Plate,"_RA_GG",Barcode,"TGCAGG.fastq")) %>%
+  mutate(File2=paste0("PLATE0",Plate,"_RB_GG",Barcode,"TGCAGG.fastq")) %>%
+  mutate(File3=paste0(SampleID,"_R1.fastq")) %>%
+  mutate(File4=paste0(SampleID,"_R2.fastq")) %>%
+  mutate(Command1 = paste0("mv data/raw/plate-1/", File1, " data/renamed/",File3)) %>%
+  mutate(Command2 = paste0("mv data/raw/plate-1/", File2, " data/renamed/",File4)) 
+p2<-m1 %>% filter(Plate==2) %>% mutate(File1=paste0("PLATE0",Plate,"_RA_GG",Barcode,"TGCAGG.fastq")) %>%
+  mutate(File2=paste0("PLATE0",Plate,"_RB_GG",Barcode,"TGCAGG.fastq")) %>%
+  mutate(File3=paste0(SampleID,"_R1.fastq")) %>%
+  mutate(File4=paste0(SampleID,"_R2.fastq")) %>%
+  mutate(Command1 = paste0("mv data/raw/plate-2/", File1, " data/renamed/",File3)) %>%
+  mutate(Command2 = paste0("mv data/raw/plate-2/", File2, " data/renamed/",File4)) 
+
+c1<-p1%>%select(Command1) %>% rename(Command=Command1)
+c2<-p1%>%select(Command2) %>% rename(Command=Command2)
+c3<-p2%>%select(Command1) %>% rename(Command=Command1)
+c4<-p2%>%select(Command2) %>% rename(Command=Command2)
+bind_rows(c1,c2,c3,c4) %>% write_tsv("101.1-rename-commands.txt", col_names = FALSE)
+```
+
+
+For comparison:
+/home/skieran/lfs/raw/mac_ototyped$ 
+```{r}
+fish<-read_csv("Longfin smelt meta and tissues/all_fish_clust_ids.csv") 
+fish$SampleID<-gsub("_0","",fish$fishid)
+fish$SampleID<-gsub("_","",fish$SampleID)
+```
+
+```{r}
+m2<-m1 %>% left_join(fish) 
+m2 %>% group_by(clust_name_100) %>% summarize(Count=n())
+```
+
+I think what would be a good thing to do is sequence all of clusters 1, 2, 3 and a randomized subset of cluster 4 (n ~ 25) to represent that.  In that way we can model the transition timing (clusters 1,2,3) and the brackish water residency (discrete, clusters 1,2,3 vs 4).
