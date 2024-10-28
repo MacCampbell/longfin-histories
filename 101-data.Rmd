@@ -54,6 +54,10 @@ bind_rows(c1,c2,c3,c4) %>% write_tsv("101.1-rename-commands.txt", col_names = FA
 
 For comparison:
 /home/skieran/lfs/raw/mac_ototyped$ 
+
+ls -al /home/skieran/lfs/raw/mac_ototyped | awk '{ if ($5 >= 40) print }' | grep R1 | wc -l
+26
+
 ```{r}
 fish<-read_csv("Longfin smelt meta and tissues/all_fish_clust_ids.csv") 
 fish$SampleID<-gsub("_0","",fish$fishid)
@@ -66,3 +70,9 @@ m2 %>% group_by(clust_name_100) %>% summarize(Count=n())
 ```
 
 I think what would be a good thing to do is sequence all of clusters 1, 2, 3 and a randomized subset of cluster 4 (n ~ 25) to represent that.  In that way we can model the transition timing (clusters 1,2,3) and the brackish water residency (discrete, clusters 1,2,3 vs 4).
+
+
+# Do align
+
+ GCF_021917145.1_fHypTra1_genomic.fna in data/dsm-align
+ 
