@@ -8,6 +8,11 @@ date: "2024-10-31"
 knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 ```
 
+```{r}
+library(tidyverse)
+library(RColorBrewer)
+```
+
 Basic ANGSD GWAS using HS and LS fish on DSM genome. Then we can try a kmer based approached. 
 
 ```{r}
@@ -19,9 +24,55 @@ m36 %>% select(ybin) %>% write_tsv(col_names=FALSE, file="bamlists/36.pheno")
 ```{sh, eval=FALSE}
  srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
  $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/36.pheno \
- -GL 1 -nThreads 12 -minInd 18 -rf outputs/102/chrom-regions.txt  \
+ -GL 1 -nThreads 12 -minInd 18 -rf outputs/101/chrom-regions.txt  \
  -minMapQ 10 -minQ 20 -minMaf 0.05 \
  -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/102/do-asso \
-  -bam bamlists/36.bamlist > outputs/102/do-asso.out 2> outputs/102/do-asso.err 
+  -bam bamlists/36.bamlist > outputs/102/do-asso.out 2> outputs/102/do-asso.err &
 ```
-  
+
+	-> Number of sites retained after filtering: 62429 
+
+```{r}
+data<-read_tsv("outputs/102/do-asso.lrt0.gz")
+```
+
+```{r}
+df <- data %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
+  filter(log10p>=0 & log10p != "Inf") %>%
+  mutate(p = dchisq(LRT, df=1)) %>%
+  mutate(bonfer = p.adjust(p, method = "bonferroni")) %>% 
+  mutate(BHfdr = p.adjust(p, method = "BH")) %>%
+  group_by(Chromosome) %>%
+  mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
+  mutate(BHfdrchrom = p.adjust(p, method = "BH"))
+
+df %>% arrange(-LRT) %>% head(n=20)
+```
+
+```{r}
+nb.cols <- length(unique(df$Chromosome))
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+#randomize
+mycolors<-sample(mycolors)
+```
+
+```{r}
+ggplot(df) +
+  geom_point(aes(x=Position, y=log10p, color=Chromosome), alpha=0.75, cex=0.5) +
+ # geom_hline(yintercept = -log10(0.05/nrow(dddf)), col="black", linetype=2, alpha=0.5) +
+#  geom_hline(yintercept= 8, col="black", linetype=1, alpha=0.5) +
+  theme_bw() +
+#  scale_x_continuous(breaks=chroms$Position, labels=chroms$Chromosome) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=8)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  ylab("-log10(p)\n") +
+  xlab("\nChromosome") +
+  ggtitle("HS vs LS") +
+  theme(plot.title = element_text(hjust=0.5) ) +
+  theme(plot.subtitle = element_text(hjust=0.5)) +
+  facet_wrap(.~Chromosome, ncol = 5, scales="free_x") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+```

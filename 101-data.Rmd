@@ -140,8 +140,8 @@ pc12<-ggplot(covs) +
   scale_fill_viridis_c(option="viridis") +
   theme(plot.title = element_text(hjust=0.5, face="bold")) +
   ggtitle("A") +
-  theme(plot.title = element_text(hjust=0, size=16)) +
-  facet_wrap(.~year)
+  theme(plot.title = element_text(hjust=0, size=16)) #+
+#  facet_wrap(.~clust_name_100)
 
 pc12
 ```
