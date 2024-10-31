@@ -1,0 +1,27 @@
+---
+title: "102-basic-GWAS"
+output: html_document
+date: "2024-10-31"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+Basic ANGSD GWAS using HS and LS fish on DSM genome. Then we can try a kmer based approached. 
+
+```{r}
+m36<-read_csv("meta/m36.csv")
+m36 %>% select(Path) %>% write_tsv(col_names=FALSE, file="bamlists/36.bamlist")
+m36 %>% select(ybin) %>% write_tsv(col_names=FALSE, file="bamlists/36.pheno")
+```
+
+```{sh, eval=FALSE}
+ srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
+ $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/36.pheno \
+ -GL 1 -nThreads 12 -minInd 18 -rf outputs/102/chrom-regions.txt  \
+ -minMapQ 10 -minQ 20 -minMaf 0.05 \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/102/do-asso \
+  -bam bamlists/36.bamlist > outputs/102/do-asso.out 2> outputs/102/do-asso.err 
+```
+  
