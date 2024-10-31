@@ -83,7 +83,7 @@ Presumably, it'll be fine. Running against `bash ../../101.2-do-align.sh to-alig
 ## Check metrics 
 ```{r}
 df<-read_csv("meta/alt-demulti.txt", col_names = c("SampleID","Aligned","Dedup","Cov"))
-ddf<-m2 %>% left_join(df)
+ddf<-m2 %>% left_join(df) %>% mutate(Path=paste0("data/alt-demultiplexed/",SampleID,".sort.flt.bam"))
 ```
 
 
@@ -96,5 +96,20 @@ ggplot(ddf) +
 ```
 
 ```{r}
-ddf %>% filter(Dedup>1e5) %>% group_by(clust_name_100) %>% summarize(Count=n())
+m100<-ddf %>% filter(Dedup>1e5) 
+m100 %>% group_by(clust_name_100) %>% summarize(Count=n())
+m100 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/49.bamlist")
 ```
+
+49 samples   
+
+Lets quickly generate a covariance matrix.
+```{sh,, eval=FALSE}
+srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12  $HOME/angsd/angsd -P 12  \
+-bam bamlists/49.bamlist -ref /home/maccamp/genomes/GCF021917145.1/GCF_021917145.1_fHypTra1_genomic.fna \
+-minInd 37 -minMapQ 10 -minQ 20 -GL 2 -doGLF 2 \
+-doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doIBS 1 -doCounts 1 -doCov 1 -makeMatrix 1 -minMaf 0.05 \
+-out outputs/101/m100-ibs-75 >outputs/101/m100-ibs-75.out 2> outputs/101/m100-ibs-75.err &
+```
+
