@@ -1,0 +1,32 @@
+I have 74 samples:
+LFS1342,17436623,1832381,0.425254 (none in alt)
+LFS1346,14785073,1612019,0.377968 (none in alt)
+
+
+Here are the samples that show up once:
+
+      1 LFS1342
+      1 LFS1346
+      1 LFS1363
+      1 LFS1364
+      1 LFS1365
+      1 LFS1366
+      1 LFS1378
+      1 LFS1379
+      1 LFS1380
+      1 LFS1381
+      1 LFS1382
+      1 LFS1384
+      1 LFS361
+      1 LFS366
+      1 LFS367
+      1 LFS372
+      1 LFS383
+      1 LFS397
+      1 LFS418
+      1 LFS545
+      
+      
+      Didn't expect LFS1363,LFS1364,LFS1365,LFS1366,LFS1378,LFS1379,LFS1380,LFS1381,LFS1382,LFS1384
+      
+      Expected: LFS361,LFS366,LFS367,LFS372,LFS383,LFS397,LFS418,LFS545

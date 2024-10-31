@@ -22,7 +22,7 @@ Have demultiplexed.
 `/home/maccamp/longfin-histories/data/raw/plate-2`    
 
 ```{r}
-m1<-read_csv("meta/samples.csv") %>% mutate(Well=paste0(Row,Column)) %>% select(-Row, -Column)
+m1<-read_csv("meta/samples-10312024.csv") %>% mutate(Well=paste0(Row,Column)) %>% select(-Row, -Column)
 barcodes<-read_csv("meta/expected-barcodes.csv")
 m1<-m1 %>% left_join(barcodes) 
 ```
@@ -75,4 +75,26 @@ I think what would be a good thing to do is sequence all of clusters 1, 2, 3 and
 # Do align
 
  GCF_021917145.1_fHypTra1_genomic.fna in data/dsm-align
- 
+ `bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/GCF021917145.1/GCF_021917145.1_fHypTra1_genomic.fna`
+ Also trying Shannon's individuals in data/alt-demultiplexed
+
+Presumably, it'll be fine. Running against `bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/genomes/denovo-genome/lfs_draft_assembly.fastq.gz`    
+
+## Check metrics 
+```{r}
+df<-read_csv("meta/alt-demulti.txt", col_names = c("SampleID","Aligned","Dedup","Cov"))
+ddf<-m2 %>% left_join(df)
+```
+
+
+```{r}
+ggplot(ddf) +
+  geom_histogram(aes(x=Dedup)) +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  ylab("Count")
+```
+
+```{r}
+ddf %>% filter(Dedup>1e5) %>% group_by(clust_name_100) %>% summarize(Count=n())
+```
