@@ -18,13 +18,24 @@ data/alt-demulti has the properly sourced files.
 
 Running alignment against the basic genome assembly from pacBio of lfs
 
-symlinking fastqs in alt-demulti to alt-longfin and aligning against pacbio
+symlinking fastqs in alt-demulti to alt-longfin and aligning against pacbio assembly without hic
+
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/genomes/denovo-genome/lfs_draft_assembly.fastq.gz
 
 ## Check metrics 
 ```{r}
-df<-read_csv("meta/alt-longfin.txt", col_names = c("SampleID","Aligned","Dedup","Cov"))
-ddf<-m2 %>% left_join(df) %>% mutate(Path=paste0("data/alt-longfin/",SampleID,".sort.flt.bam"))
+fish<-read_csv("Longfin smelt meta and tissues/all_fish_clust_ids.csv") 
+fish$SampleID<-gsub("_0","",fish$fishid)
+fish$SampleID<-gsub("_","",fish$SampleID)
 ```
+
+
+
+```{r}
+df<-read_csv("meta/alt-longfin.txt", col_names = c("SampleID","Aligned","Dedup","Cov"))
+ddf<-df %>% left_join(fish, by=c("SampleID"="fishid")) %>% mutate(Path=paste0("data/alt-longfin/",SampleID,".sort.flt.bam"))
+```
+
 
 
 ```{r}
@@ -46,7 +57,8 @@ m100 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/ .bamlist"
 Lets quickly generate a covariance matrix.
 ```{sh,, eval=FALSE}
 srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12  $HOME/angsd/angsd -P 12  \
--bam bamlists/ .bamlist -ref /home/maccamp/genomes/GCF021917145.1/GCF_021917145.1_fHypTra1_genomic.fna \
+-bam bamlists/ .bamlist  \ 
+-ref  /home/maccamp/longfin-histories/genomes/denovo-genome/lfs_draft_assembly.fastq.gz  \
 -minInd 37 -minMapQ 10 -minQ 20 -GL 2 -doGLF 2 \
 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doIBS 1 -doCounts 1 -doCov 1 -makeMatrix 1 -minMaf 0.05 \
@@ -114,5 +126,8 @@ mxxx <-m100 %>% filter(clust_name_100 %in% c("HS","LS")) %>%
 write_csv(mxxx, file="meta/m  .csv")
 ```
 
+# Now for basic GWAS
 
+# Now to consider what to test in GWAS.
 
+Growth rates?
