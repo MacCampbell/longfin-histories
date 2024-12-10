@@ -76,7 +76,8 @@ I think what would be a good thing to do is sequence all of clusters 1, 2, 3 and
 
  GCF_021917145.1_fHypTra1_genomic.fna in data/dsm-align
  `bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/GCF021917145.1/GCF_021917145.1_fHypTra1_genomic.fna`
- Also trying Shannon's individuals in data/alt-demultiplexed
+ 
+Also trying Shannon's individuals in data/alt-demultiplexed
 
 Presumably, it'll be fine. Running against `bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/genomes/denovo-genome/lfs_draft_assembly.fastq.gz`    
 
