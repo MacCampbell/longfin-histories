@@ -33,7 +33,7 @@ fish$SampleID<-gsub("_","",fish$SampleID)
 
 ```{r}
 df<-read_csv("meta/alt-longfin.txt", col_names = c("SampleID","Aligned","Dedup","Cov"))
-ddf<-df %>% left_join(fish, by=c("SampleID"="fishid")) %>% mutate(Path=paste0("data/alt-longfin/",SampleID,".sort.flt.bam"))
+ddf<- left_join(df,fish, by=c("SampleID"="SampleID")) %>% mutate(Path=paste0("data/alt-longfin/",SampleID,".sort.flt.bam"))
 ```
 
 
@@ -49,15 +49,15 @@ ggplot(ddf) +
 ```{r}
 m100<-ddf %>% filter(Dedup>1e5) 
 m100 %>% group_by(clust_name_100) %>% summarize(Count=n())
-m100 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/ .bamlist")
+m100 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/53.bamlist")
 ```
 
-49 samples   
+53 samples   
 
 Lets quickly generate a covariance matrix.
 ```{sh,, eval=FALSE}
 srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12  $HOME/angsd/angsd -P 12  \
--bam bamlists/ .bamlist  \ 
+-bam bamlists/53.bamlist  \ 
 -ref  /home/maccamp/longfin-histories/genomes/denovo-genome/lfs_draft_assembly.fastq.gz  \
 -minInd 37 -minMapQ 10 -minQ 20 -GL 2 -doGLF 2 \
 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
