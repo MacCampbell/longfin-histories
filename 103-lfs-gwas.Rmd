@@ -56,15 +56,13 @@ m100 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/53.bamlist
 
 Lets quickly generate a covariance matrix.
 ```{sh,, eval=FALSE}
-srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12  $HOME/angsd/angsd -P 12  \
--bam bamlists/53.bamlist  \ 
--ref  /home/maccamp/longfin-histories/genomes/denovo-genome/lfs_draft_assembly.fastq.gz  \
+srun -p bigmemm -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12  $HOME/angsd/angsd -P 12 -bam bamlists/53.bamlist -ref  /home/maccamp/longfin-histories/genomes/denovo-genome/lfs_draft_assembly.fastq \
 -minInd 37 -minMapQ 10 -minQ 20 -GL 2 -doGLF 2 \
 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doIBS 1 -doCounts 1 -doCov 1 -makeMatrix 1 -minMaf 0.05 \
 -out outputs/103/m100-ibs-75 >outputs/103/m100-ibs-75.out 2> outputs/103/m100-ibs-75.err &
 ```
-	-> Number of sites retained after filtering:  
+	-> Number of sites retained after filtering:  46829 (from 37,493)!!! 
 
 ```{r}
 m <- as.matrix(read.table("outputs/103/m100-ibs-75.covMat"))
@@ -121,12 +119,25 @@ scree
 ## Filter to HS/LS
 
 ```{r}
-mxxx <-m100 %>% filter(clust_name_100 %in% c("HS","LS")) %>% 
+m37 <-m100 %>% filter(clust_name_100 %in% c("HS","LS")) %>% 
   mutate(ybin=ifelse(clust_name_100=="HS",0,1))
-write_csv(mxxx, file="meta/m  .csv")
+write_csv(m37, file="meta/m37.csv")
+
+m37 %>% select(Path) %>% write_tsv(col_names=FALSE, file="bamlists/37.bamlist")
+m37 %>% select(ybin) %>% write_tsv(col_names=FALSE, file="bamlists/37.pheno")
+
 ```
 
 # Now for basic GWAS
+
+```{sh, eval=FALSE}
+ srun -p bigmemm -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=8 \
+ $HOME/angsd/angsd -P 8 -doAsso 1 -doPost 1 -yBin bamlists/36.pheno \
+ -GL 1 -nThreads 8 -minInd 18 \ 
+ -minMapQ 10 -minQ 20 -minMaf 0.05 \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/103/do-asso \
+  -bam bamlists/37.bamlist > outputs/103/do-asso.out 2> outputs/103/do-asso.err &
+```
 
 # Now to consider what to test in GWAS.
 
