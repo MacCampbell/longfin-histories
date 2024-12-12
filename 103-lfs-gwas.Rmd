@@ -10,6 +10,8 @@ knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
 
 ```{r}
 library(tidyverse)
+library(RColorBrewer)
+
 ```
 
 let's get alt-demultiplexed fish aligned against lfs
@@ -96,6 +98,8 @@ pc12<-ggplot(covs) +
 pc12
 ```
 
+Ack, looks inversion-y
+
 Scree plot
 
 ```{r}
@@ -132,13 +136,102 @@ m37 %>% select(ybin) %>% write_tsv(col_names=FALSE, file="bamlists/37.pheno")
 
 ```{sh, eval=FALSE}
  srun -p bigmemm -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=8 \
- $HOME/angsd/angsd -P 8 -doAsso 1 -doPost 1 -yBin bamlists/36.pheno \
- -GL 1 -nThreads 8 -minInd 18 \ 
+ $HOME/angsd/angsd -P 8 -doAsso 1 -doPost 1 -yBin bamlists/37.pheno \
+ -GL 1 -nThreads 8 -minInd 18 \
  -minMapQ 10 -minQ 20 -minMaf 0.05 \
  -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/103/do-asso \
   -bam bamlists/37.bamlist > outputs/103/do-asso.out 2> outputs/103/do-asso.err &
 ```
 
+
+Previously with lfs  outputs/101/chrom-regions.txt  
+	-> Number of sites retained after filtering: 62429 
+Now
+	-> Number of sites retained after filtering: 87232 
+
+```{r}
+data<-read_tsv("outputs/103/do-asso.lrt0.gz")
+```
+
+```{r}
+df <- data %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
+  filter(log10p>=0 & log10p != "Inf") %>%
+  mutate(p = dchisq(LRT, df=1)) %>%
+  mutate(bonfer = p.adjust(p, method = "bonferroni")) %>% 
+  mutate(BHfdr = p.adjust(p, method = "BH")) %>%
+  group_by(Chromosome) %>%
+  mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
+  mutate(BHfdrchrom = p.adjust(p, method = "BH"))
+
+df %>% arrange(-LRT) %>% head(n=20)
+```
+```{r}
+df20<-df %>% arrange(-LRT) %>% head(n=10)
+
+dfs<-df %>%filter(Chromosome %in% df20$Chromosome)
+```
+
+```{r}
+nb.cols <- length(unique(dfs$Chromosome))
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+#randomize
+mycolors<-sample(mycolors)
+```
+
+```{r}
+ggplot(dfs) +
+  geom_point(aes(x=Position, y=log10p, color=Chromosome), alpha=0.75, cex=0.5) +
+ # geom_hline(yintercept = -log10(0.05/nrow(dddf)), col="black", linetype=2, alpha=0.5) +
+#  geom_hline(yintercept= 8, col="black", linetype=1, alpha=0.5) +
+  theme_bw() +
+#  scale_x_continuous(breaks=chroms$Position, labels=chroms$Chromosome) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=8)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  ylab("-log10(p)\n") +
+  xlab("\nChromosome") +
+  ggtitle("HS vs LS") +
+  theme(plot.title = element_text(hjust=0.5) ) +
+  theme(plot.subtitle = element_text(hjust=0.5)) +
+  facet_wrap(.~Chromosome, ncol = 5, scales="free_x") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+```
+
 # Now to consider what to test in GWAS.
 
 Growth rates?
+
+
+# Higher coverage samples and the pc patterns
+
+```{r}
+m250<-ddf %>% filter(Dedup>4e5) 
+m250 %>% group_by(clust_name_100) %>% summarize(Count=n())
+m250 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/m250.bamlist")
+```
+
+37 inds    
+
+May expect this:    
+
+```{r}
+sub<-ggplot(covs %>% filter(Dedup > 4e5)) +
+  geom_point(aes(x=V1, y=V2, shape=clust_name_100, fill=Dedup), cex=3, alpha=0.75) +
+  xlab(paste("PC1", " ", round((100*var[1]),2), "%", sep = "")) +
+  ylab(paste("PC2", " ", round((100*var[2]),2), "%", sep = "")) +
+  scale_shape_manual(values=c(23,24,21,22)) +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  #scale_fill_viridis_c() +
+  scale_fill_viridis_c(option="viridis") +
+  theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  ggtitle("A") +
+  theme(plot.title = element_text(hjust=0, size=16))
+
+sub
+```
+
+Call some snps to see about PCA/LD
