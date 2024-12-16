@@ -194,3 +194,71 @@ plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-c
 bgzip plink.vcf 
 tabix plink.vcf.gz
 ```
+	-> Number of sites retained after filtering: 11762 
+
+bcftools +fill-tags plink.vcf.gz | bcftools +prune -l 0.3 -w10000bp -n 1 > plink-pruned.vcf
+
+
+```{r}
+snps<-import.snpR.data(genotypes = "outputs/101/plink-pruned.vcf", 
+      sample.meta = m300 %>% select(SampleID, Aligned, Dedup, year, WY, region, clust_name_100))
+```
+
+```{r}
+p <- plot_clusters(snps, facets = c("Dedup.clust_name_100"), viridis.option = "H")
+p$plot$pca
+```
+
+
+```{r}
+vcf<-read.vcfR(file="outputs/101/plink-pruned.vcf")
+genind<-vcfR2genind(vcf)
+genind@pop<-as.factor(m300$clust_name_100)
+```
+
+
+```{r}
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(m300)
+
+eig<-pca1$eig/sum(pca1$eig)*100
+```
+
+```{r}
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=region, shape=clust_name_100), alpha=0.75, cex=2) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="H") +
+  scale_shape_manual(values=c(21,24,23,22)) +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") +
+  geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
+pc12
+
+ggsave("outputs/101/lfs-dsm-align-prunedMAF-pca.pdf")
+```
+
+```{r}
+loadings<-pca1$c1 %>% as_tibble()
+loadings$Allele<-rownames(pca1$c1)  
+loadings$Position<-gsub("NC_.*_|\\.\\d$","",loadings$Allele)
+loadings$Position<-as.numeric(loadings$Position)
+
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .01) %>% select(-CS2, -CS3) %>% 
+  mutate(MajorMinor=gsub("NC.*\\.","",Allele)) 
+tops$Chrom<-gsub("_1_.*$",".1",tops$Allele)
+
+tops
+```
+
+## Pull in night smelt
+
+Can go to the 

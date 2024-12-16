@@ -305,7 +305,7 @@ eig<-pca1$eig/sum(pca1$eig)*100
 
 ```{r}
 pc12<-ggplot(df) + 
-  geom_point(aes(x=Axis1, y=Axis2, fill=region, shape=clust_name_100), alpha=0.75, cex=2) +
+  geom_point(aes(x=Axis1, y=Axis2, fill=as.factor(year), shape=clust_name_100), alpha=0.75, cex=2) +
   theme_bw() +
   xlab(paste0("PC1 ",round(eig[1],2), "%")) +
   ylab(paste0("PC2 ",round(eig[2],2), "%")) +
@@ -313,11 +313,11 @@ pc12<-ggplot(df) +
   scale_fill_viridis_d(option="H") +
   scale_shape_manual(values=c(21,24,23,22)) +
   guides(fill = guide_legend(override.aes = list(pch = 22))) +
-  theme(legend.position = "top") +
+ # theme(legend.position = "top") +
   geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
 pc12
 
-ggsave("outputs/103/lfs-lfs-align-prunedMAF-pca.pdf")
+ggsave("outputs/103/lfs-lfs-align-prunedMAF-pca.jpeg")
 ```
 
 
@@ -338,6 +338,31 @@ What about admixture analyses?
 
 ```{r}
 plot_structure(snps, facet = "year", k=2)
+ggsave("outputs/103/admixture-years.jpeg")
 ```
 
 Interesting....
+forage fishes
+HS2253_AGTCAA-CAAGACTA	Night Smelt
+HS2253_AGTCAA-CTCAATGA	Night Smelt
+HS2253_AGTCAA-GGTGCGAA	Night Smelt
+plate-3-ACACTGAC	Night Smelt
+plate-3-AGTCACTA	Night Smelt
+plate-3-CCGACAAC	Night Smelt
+```{sh, eval=FALSE}
+#plate1 alt-1
+cp HS2253_AGTCAA_R*_*CAAGACTA*.fastq ~/longfin-histories/data/night/
+cp HS2253_AGTCAA_R*_*CTCAATGA*.fastq ~/longfin-histories/data/night/
+cp HS2253_AGTCAA_R*_*GGTGCGAA*.fastq ~/longfin-histories/data/night/
+#plate3 alt-3
+cp HS2253_AGTCAA_R*ACACTGAC*.fastq ~/longfin-histories/data/night/
+cp HS2253_AGTCAA_R*AGTCACTA*.fastq ~/longfin-histories/data/night/
+cp HS2253_AGTCAA_R*CCGACAAC*.fastq ~/longfin-histories/data/night/
+```
+
+gzip,  then align!
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/genomes/denovo-genome/lfs_draft_assembly.fastq`
+
+```
+
+```
