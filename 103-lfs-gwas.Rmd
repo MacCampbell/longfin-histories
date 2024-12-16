@@ -361,8 +361,20 @@ cp HS2253_AGTCAA_R*CCGACAAC*.fastq ~/longfin-histories/data/night/
 ```
 
 gzip,  then align!
-bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/genomes/denovo-genome/lfs_draft_assembly.fastq`
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/genomes/denovo-genome/lfs_draft_assembly.fastq.gz`
 
-```
+renaming Night01-06
 
+```{sh, eval=FALSE}
+srun -t 12:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 35 -bam bamlists/test-night.bamlist -ref /home/maccamp/longfin-histories/genomes/denovo-genome/lfs_draft_assembly.fastq \
+ -out outputs/103/snps-wgs-night  \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/103/snps-night-wgs.out 2> outputs/103/snps-wgs-night.err &
+
+#create vcf
+plink --tped snps-wgs-night.tped --tfam snps-wgs-night.tfam  --out plink-binary --recode --allow-extra-chr --noweb
+plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-chr -out night
+bgzip night.vcf 
+tabix night.vcf.gz
 ```
