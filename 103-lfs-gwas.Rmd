@@ -366,7 +366,7 @@ bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/genome
 renaming Night01-06
 
 ```{sh, eval=FALSE}
-srun -t 12:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+srun -t 3:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
 -minInd 35 -bam bamlists/test-night.bamlist -ref /home/maccamp/longfin-histories/genomes/denovo-genome/lfs_draft_assembly.fastq \
  -out outputs/103/snps-wgs-night  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
@@ -377,4 +377,49 @@ plink --tped snps-wgs-night.tped --tfam snps-wgs-night.tfam  --out plink-binary 
 plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-chr -out night
 bgzip night.vcf 
 tabix night.vcf.gz
+```
+
+31784 variants
+meta
+
+```{r}
+night<-read_csv("meta/test-night.csv")
+night
+```
+bcftools +fill-tags night.vcf.gz | bcftools +prune -l 0.3 -w10000bp -n 1 > night-pruned.vcf
+
+```{r}
+vcf<-read.vcfR(file="outputs/103/night-pruned.vcf")
+genind<-vcfR2genind(vcf)
+genind@pop<-as.factor(night$clust_name_100)
+```
+
+
+```{r}
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(night)
+
+eig<-pca1$eig/sum(pca1$eig)*100
+```
+
+```{r}
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=as.factor(year), shape=clust_name_100), alpha=0.75, cex=2) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="H") +
+  scale_shape_manual(values=c(21,24,23,22,25)) +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+ # theme(legend.position = "top") +
+  geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
+pc12
+
+ggsave("outputs/103/night-align-prunedMAF-pca.jpeg")
 ```
