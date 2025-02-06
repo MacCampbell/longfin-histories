@@ -159,3 +159,5 @@ snps<-import.snpR.data(genotypes = "outputs/104/plink-pruned.vcf",
 p <- plot_clusters(snps, facets = c("Dedup.clust_name_100"), viridis.option = "H")
 p$plot$pca
 ```
+
+At some point I should probably downsample these 1.5e5 or something.
