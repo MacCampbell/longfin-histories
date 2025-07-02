@@ -1,0 +1,17 @@
+•# number of contigs:  624
+•# total contigs length: 591432708
+•# mean contig size:   947808.83
+•# contig size first quartile: 32949
+•# median contig size:    60338
+•# contig size third quartile: 130016
+•# longest contig:      27125847
+•# shortest contig:      1000
+•# contigs > 500 nt:     624 (100.00 %)
+•# contigs > 1K nt:      620 (99.36 %)
+•# contigs > 10K nt:     600 (96.15 %)
+•# contigs > 100K nt:     200 (32.05 %)
+•# contigs > 1M nt:      38 (6.09 %)
+•# N50        18167578
+•# L50        14
+•# N80        11782464
+•# L80        25

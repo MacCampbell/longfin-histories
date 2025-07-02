@@ -1,0 +1,55 @@
+---
+title: "201-kmer-gwas"
+output: html_document
+date: "2025-07-02"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+Need to set up a conda environment with:
+
+python 2.7
+R
+R packages; MASS, Mvnpermute, matrixcalc
+
+conda create -n kmers python=2.7
+conda activate kmers
+conda install R
+
+mkdir kmers
+cd kmers
+wget https://github.com/voichek/kmersGWAS/releases/download/v0.3-beta/v0_3_beta.zip
+unzip
+
+Make kmers?
+
+in outputs/201
+
+_1_ need fastqs as a text file, 'LFS540.txt'
+
+/home/maccamp/longfin-histories/data/alt-demultiplexed/LFS540_R1.fastq.gz
+/home/maccamp/longfin-histories/data/alt-demultiplexed/LFS540_R2.fastq.gz
+
+_2_ run kmc.  
+
+```{sh, eval=FALSE}
+/home/maccamp/kmers/external_programs/kmc_v3 -t2 -k31 -ci2 @LFS540.txt LFS540_kmc_canon ./ 1> kmc_canon.1 2> kmc_canon.2
+ 
+/home/maccamp/kmers/external_programs/kmc_v3 -t2 -k31 -ci0 -b @LFS540.txt LFS540_kmc_all ./ 1> kmc_all.1 2> kmc_all.2
+
+/home/maccamp/kmers/bin/kmers_add_strand_information -c LFS540_kmc_canon -n LFS540_kmc_all -k 31 -o LFS540-kmers_with_strand
+
+## clean up
+rm *.kmc*
+```
+
+Produces LFS540-kmers_with_strand
+
+Should make each individual a directory
+Can restrict to the set of fish that we run GWAS on
