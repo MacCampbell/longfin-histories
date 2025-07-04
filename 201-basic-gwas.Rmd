@@ -36,7 +36,7 @@ removing -rf outputs/101/chrom-regions.txt and redoing
  $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/37.pheno \
  -GL 1 -nThreads 12 -minInd 18 \
  -minMapQ 10 -minQ 20 -minMaf 0.05 \
- -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/102/do-asso \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/201/do-asso \
   -bam bamlists/37.bamlist > outputs/201/do-asso.out 2> outputs/201/do-asso.err &
 
 #randomized scores  
@@ -44,7 +44,7 @@ srun -p med -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=
  $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/37.rand \
  -GL 1 -nThreads 12 -minInd 18 \
  -minMapQ 10 -minQ 20 -minMaf 0.05 \
- -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/102/do-asso-rand \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/201/do-asso-rand \
   -bam bamlists/37.bamlist > outputs/201/do-asso-rand.out 2> outputs/201/do-asso-rand.err &
 ```
 
@@ -53,7 +53,7 @@ srun -p med -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=
 
 
 ```{r}
-data<-read_tsv("outputs/102/do-asso.lrt0.gz")
+data<-read_tsv("outputs/201/do-asso.lrt0.gz")
 ```
 
 ```{r}
@@ -97,14 +97,14 @@ ggplot(df %>% filter(Chromosome %in% unique(dfs$Chromosome))) +
   facet_wrap(.~Chromosome, ncol = 5, scales="free_x") +
   theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
 
-ggsave("outputs/102/longfin-HS-LS-dsm-genome.pdf")
+ggsave("outputs/200/longfin-HS-LS-gwas.pdf")
 ```
 
 ## random phenos
 
 74678 
 ```{r}
-data<-read_tsv("outputs/102/do-asso-rand.lrt0.gz")
+data<-read_tsv("outputs/201/do-asso-rand.lrt0.gz")
 ```
 
 ```{r}
@@ -148,5 +148,5 @@ ggplot(df %>% filter(Chromosome %in% unique(dfs$Chromosome))) +
   facet_wrap(.~Chromosome, ncol = 5, scales="free_x") +
   theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
 
-ggsave("outputs/102/longfin-HS-LS-dsm-genome-rand.pdf")
+ggsave("outputs/200/longfin-HS-LS-rand.pdf")
 ```

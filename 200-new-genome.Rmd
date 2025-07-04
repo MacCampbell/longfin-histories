@@ -10,6 +10,10 @@ knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 
 ```{r}
 library(tidyverse)
+library(snpR)
+library(adegenet)
+library(vcfR)
+library(ggrepel)
 ```
 
 Shannon's demultiplexed individuals are in: data/alt-demultiplexed, now in
@@ -160,6 +164,62 @@ scree
 ```
 
 
+What about m200
+
+	
+	
+```{r}
+m <- as.matrix(read.table("outputs/200/m300-ibs-75.covMat"))
+eig <- eigen(m)
+var<-eig$values/sum(eig$values)
+cumvar<-cumsum(eig$values)/sum(eig$values)
+
+head(var)
+head(cumvar)
+```
+
+
+```{r}
+covs<-eig$vectors[,1:3] %>% as_tibble() %>% bind_cols(m300)
+
+pc12<-ggplot(covs) +
+  geom_point(aes(x=V1, y=V2, shape=clust_name_100, fill=Dedup), cex=3, alpha=0.75) +
+  xlab(paste("PC1", " ", round((100*var[1]),2), "%", sep = "")) +
+  ylab(paste("PC2", " ", round((100*var[2]),2), "%", sep = "")) +
+  scale_shape_manual(values=c(23,24,21,22)) +a
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  #scale_fill_viridis_c() +
+  scale_fill_viridis_c(option="viridis") +
+  theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  ggtitle("A") +
+  theme(plot.title = element_text(hjust=0, size=16)) #+
+#  facet_wrap(.~clust_name_100)
+
+pc12
+```
+
+Scree plot
+
+```{r}
+vardf<-var %>% as_tibble() %>% rename(`Percent Variance`=value) %>% head() %>% mutate(PC=1:n())
+
+scree<-ggplot(vardf, aes(x=PC, y=`Percent Variance`)) +
+  geom_line() +
+  geom_point() +
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  scale_x_continuous(breaks = seq(1:6)) +
+  theme(axis.text = element_text(size=10)) +
+  theme(axis.title = element_text(size=14)) +
+  theme(plot.title = element_text(hjust=0, size=16))
+
+
+scree
+```
+
+
 ## Filter to HS/LS
 
 ```{r}
@@ -182,24 +242,22 @@ srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task
 -out outputs/200/snps-wgs  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/200/snps.out 2> outputs/200/snps.err &
+#	-> Number of sites retained after filtering: 12768 
 
 #create vcf
-plink --tped snps.tped --tfam snps.tfam  --out plink-binary --recode --allow-extra-chr --noweb
+plink --tped snps-wgs.tped --tfam snps-wgs.tfam  --out plink-binary --recode --allow-extra-chr --noweb
 plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-chr -out plink
 bgzip plink.vcf 
 tabix plink.vcf.gz
+
+module load bcftools
+bcftools +fill-tags plink.vcf.gz | bcftools view -i 'F_MISSING < 0.10' | bcftools view -i 'INFO/MAF > 0.01' > filtered.vcf
+bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered.vcf > plink-pruned.vcf
 ```
 	
-#### Leaving off
-
-	
-	-> Number of sites retained after filtering: 11762 
-
-bcftools +fill-tags plink.vcf.gz | bcftools +prune -l 0.3 -w10000bp -n 1 > plink-pruned.vcf
-
 
 ```{r}
-snps<-import.snpR.data(genotypes = "outputs/101/plink-pruned.vcf", 
+snps<-import.snpR.data(genotypes = "outputs/200/plink-pruned.vcf", 
       sample.meta = m300 %>% select(SampleID, Aligned, Dedup, year, WY, region, clust_name_100))
 ```
 
@@ -210,7 +268,7 @@ p$plot$pca
 
 
 ```{r}
-vcf<-read.vcfR(file="outputs/101/plink-pruned.vcf")
+vcf<-read.vcfR(file="outputs/200/plink-pruned.vcf")
 genind<-vcfR2genind(vcf)
 genind@pop<-as.factor(m300$clust_name_100)
 ```
@@ -242,7 +300,7 @@ pc12<-ggplot(df) +
   geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
 pc12
 
-ggsave("outputs/101/lfs-dsm-align-prunedMAF-pca.pdf")
+ggsave("outputs/200/lfs-pruned-pca.pdf")
 ```
 
 ```{r}
@@ -256,4 +314,104 @@ tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .01) %>% se
 tops$Chrom<-gsub("_1_.*$",".1",tops$Allele)
 
 tops
+
+
+tops<-loadings %>% arrange(-CS2) %>% slice_max(order_by = CS2,prop = .01) %>% select(-CS1, -CS3) %>% 
+  mutate(MajorMinor=gsub("NC.*\\.","",Allele)) 
+tops$Chrom<-gsub("_1_.*$",".1",tops$Allele)
+
+tops
 ```
+
+## Chrom by Chrom PCA?
+
+```{r}
+seqlens<-read_tsv("meta/seqlens.tsv", col_names = c("Seq","Length"))
+seqlens %>% filter(Length > 1e6) %>% select(Seq) %>% write_tsv("outputs/200/long-seqs.tsv", col_names = FALSE)
+```
+
+38 pieces > 1 Mb
+
+We should do a chrom by chrom PCA
+
+Also LD
+
+Split by chroms
+
+```{sh, eval=FALSE}
+bgzip filtered.vcf
+tabix filtered.vcf.gz
+
+cat outputs/200/long-seqs.tsv  | while read line; do bcftools view -Ov -r $line outputs/200/filtered.vcf.gz > outputs/200/vcfs/$line.vcf; done;
+
+for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basename $f vcf`ldf --allow-extra-chr --double-id; done;
+```
+
+
+
+```{r, eval=FALSE}
+files<-list.files("outputs/200/vcfs",pattern = "*.ldf.ld", full.names = TRUE)
+
+plotLd<-function(file) {
+  chrom<-gsub("outputs/200/vcfs/","",file)
+  chrom<-gsub(".ldf.ld","", chrom)
+  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.3)
+
+  ggplot(lc) +
+  geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle(paste0(chrom))+
+  theme_bw() +
+  theme(panel.grid = element_blank())
+ggsave(paste0("outputs/200/chrom-ld/",chrom,".pdf"))
+}
+
+lapply(files, plotLd)
+```
+
+
+```{r, eval=FALSE}
+files<-list.files("outputs/200/vcfs",pattern = "*5.vcf", full.names = TRUE)
+
+plotPCA<-function(file) {
+  meta<-m300
+  chrom<-gsub("outputs/200/vcfs/","",file)
+  chrom<-gsub(".vcf","", chrom)
+  
+  vcf<-read.vcfR(file=file)
+  genind<-vcfR2genind(vcf)
+  genind@pop<-as.factor(meta$clust_name_100)
+
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(meta)
+
+
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=region, shape=clust_name_100), alpha=0.75, cex=2) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="H") +
+  scale_shape_manual(values=c(21,24,23,22)) +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") +
+  geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
+pc12
+
+ggsave(paste0("outputs/200/chrom-pcs/",chrom,".pdf"))
+}
+
+lapply(files, plotPCA)
+```
+
+
+## Pruned .vcf as phylogeny?
+
+
+
