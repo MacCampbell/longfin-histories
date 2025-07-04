@@ -30,50 +30,86 @@ fish<-fish %>% relocate(SampleID)
 fish %>% group_by(clust_name_100) %>% summarize(Count=n())
 ```
 
-LFS1341 did not compelte alignment
-LFS1351
+LFS1341 did not complete alignment
+LFS1351 did not complete alignment
+Extending run time and resubmitting
+`bash ../../101.2-do-align.sh to-align2.txt /home/maccamp/genomes/longfin-chrom/lfs_final_scaff_assembly.fasta` 
 ## Check metrics, compare to previous version.
 
+(base) maccamp@farm:~/longfin-histories/data/alt-newgenome$ cat *stats > alt-newgenome-stat.csv
 
-## Copy this, changing names and paths
+```{r}
+gf<-read_csv("meta/alt-newgenome-stat.csv", col_names = c("SampleID","Aligned","Dedup","Cov"))
+ggf<-left_join(gf,fish) %>% mutate(Path=paste0("data/alt-newgenome/",SampleID,".sort.flt.bam"))
+ggf
+```
+74 samples
 
+Previous alignment 
 ```{r}
 df<-read_csv("meta/alt-demulti.txt", col_names = c("SampleID","Aligned","Dedup","Cov"))
-ddf<-m2 %>% left_join(df) %>% mutate(Path=paste0("data/alt-demultiplexed/",SampleID,".sort.flt.bam"))
+ddf<-left_join(df, fish) %>% mutate(Path=paste0("data/alt-demultiplexed/",SampleID,".sort.flt.bam"))
+ddf
 ```
 
-
+let's compare
 ```{r}
-ggplot(ddf) +
+gdf<-ggf %>% left_join(ddf %>% select(SampleID, Dedup) %>% rename(PreviousDedup=Dedup)) %>% filter(SampleID != "LFS365")
+#LFS365 is empty
+gdf %>% mutate(Improvement=Dedup/PreviousDedup) %>% select(Improvement) %>% summarise(Mean=mean(Improvement), Median=median(Improvement))
+```
+```{r}
+ggplot(gdf) +
   geom_histogram(aes(x=Dedup)) +
   theme_bw() +
   theme(panel.grid=element_blank()) +
   ylab("Count")
 ```
 
-```{r}
-m100<-ddf %>% filter(Dedup>1e5) 
-m100 %>% group_by(clust_name_100) %>% summarize(Count=n())
-m100 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/49.bamlist")
 
-m300<-ddf %>% filter(Dedup > 3e5)
-m300 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/34.bamlist")
+```{r}
+m100<-gdf %>% filter(Dedup>1e5) 
+m100 %>% group_by(clust_name_100) %>% summarize(Count=n())
+m100 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/53.bamlist")
+# Four more fish here!
+
+m200<-gdf %>% filter(Dedup > 2e5)
+m200 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/46.bamlist")
+
+m300<-gdf %>% filter(Dedup > 3e5)
+m300 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/40.bamlist")
+#Six more fish here
 ```
 
 
 Lets quickly generate a covariance matrix.
+
 ```{sh,, eval=FALSE}
 srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12  $HOME/angsd/angsd -P 12  \
--bam bamlists/49.bamlist -ref /home/maccamp/genomes/GCF021917145.1/GCF_021917145.1_fHypTra1_genomic.fna \
--minInd 37 -minMapQ 10 -minQ 20 -GL 2 -doGLF 2 \
+-bam bamlists/53.bamlist -ref /home/maccamp/genomes/longfin-chrom/lfs_final_scaff_assembly.fasta \
+-minInd 40 -minMapQ 10 -minQ 20 -GL 2 -doGLF 2 \
 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doIBS 1 -doCounts 1 -doCov 1 -makeMatrix 1 -minMaf 0.05 \
--out outputs/101/m100-ibs-75 >outputs/101/m100-ibs-75.out 2> outputs/101/m100-ibs-75.err &
-```
-	-> Number of sites retained after filtering: 37493 
+-out outputs/200/m100-ibs-75 >outputs/200/m100-ibs-75.out 2> outputs/200/m100-ibs-75.err &
 
+srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12  $HOME/angsd/angsd -P 12  \
+-bam bamlists/46.bamlist -ref /home/maccamp/genomes/longfin-chrom/lfs_final_scaff_assembly.fasta \
+-minInd 35 -minMapQ 10 -minQ 20 -GL 2 -doGLF 2 \
+-doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doIBS 1 -doCounts 1 -doCov 1 -makeMatrix 1 -minMaf 0.05 \
+-out outputs/200/m200-ibs-75 >outputs/200/m200-ibs-75.out 2> outputs/200/m200-ibs-75.err &
+
+srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12  $HOME/angsd/angsd -P 12  \
+-bam bamlists/40.bamlist -ref /home/maccamp/genomes/longfin-chrom/lfs_final_scaff_assembly.fasta \
+-minInd 30 -minMapQ 10 -minQ 20 -GL 2 -doGLF 2 \
+-doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doIBS 1 -doCounts 1 -doCov 1 -makeMatrix 1 -minMaf 0.05 \
+-out outputs/200/m300-ibs-75 >outputs/200/m300-ibs-75.out 2> outputs/200/m300-ibs-75.err &
+```
+	
+	
 ```{r}
-m <- as.matrix(read.table("outputs/101/m100-ibs-75.covMat"))
+m <- as.matrix(read.table("outputs/200/m100-ibs-75.covMat"))
 eig <- eigen(m)
 var<-eig$values/sum(eig$values)
 cumvar<-cumsum(eig$values)/sum(eig$values)
@@ -129,15 +165,19 @@ scree
 ```{r}
 m36<-m100 %>% filter(clust_name_100 %in% c("HS","LS")) %>% 
   mutate(ybin=ifelse(clust_name_100=="HS",0,1))
-write_csv(m36, file="meta/m36.csv")
+write_csv(m36, file="meta/m36-new.csv")
 ```
 
+
+
+
+#### Leaving off
 
 Call some snps to see about PCA/LD
 
 ```{sh, eval=FALSE}
 srun -t 12:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 31 -bam bamlists/34.bamlist -ref /home/maccamp/genomes/GCF021917145.1/GCF_021917145.1_fHypTra1_genomic.fna \
+-minInd 31 -bam bamlists/34.bamlist -ref //home/maccamp/genomes/longfin-chrom/lfs_final_scaff_assembly.fasta \
 -rf outputs/101/chrom-regions.txt \
 -out outputs/101/snps-wgs  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
@@ -212,13 +252,4 @@ tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .01) %>% se
 tops$Chrom<-gsub("_1_.*$",".1",tops$Allele)
 
 tops
-```
-
-
-## Filter to HS/LS
-
-```{r}
-m36<-m100 %>% filter(clust_name_100 %in% c("HS","LS")) %>% 
-  mutate(ybin=ifelse(clust_name_100=="HS",0,1))
-write_csv(m36, file="meta/m36.csv")
 ```
