@@ -1,0 +1,152 @@
+---
+title: "201-basic-gwas"
+output: html_document
+date: "2025-07-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+
+
+```{r}
+library(tidyverse)
+library(RColorBrewer)
+```
+
+Basic ANGSD GWAS using HS and LS fish on DSM genome. Then we can try a kmer based approached. 
+
+```{r}
+m37<-read_csv("meta/m37.csv")
+m37 %>% select(Path) %>% write_tsv(col_names=FALSE, file="bamlists/37.bamlist")
+m37 %>% select(ybin) %>% write_tsv(col_names=FALSE, file="bamlists/37.pheno")
+```
+
+create null example by randomly generating 0 or 1
+```{r, eval=FALSE}
+rand<-sample(0:1,37, replace=T) 
+m37$Rand<-rand 
+m37 %>% select(Rand) %>% write_tsv(col_names=FALSE, file="bamlists/37.rand")
+```
+
+removing -rf outputs/101/chrom-regions.txt and redoing 
+```{sh, eval=FALSE}
+ srun -p med -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
+ $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/37.pheno \
+ -GL 1 -nThreads 12 -minInd 18 \
+ -minMapQ 10 -minQ 20 -minMaf 0.05 \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/102/do-asso \
+  -bam bamlists/37.bamlist > outputs/201/do-asso.out 2> outputs/201/do-asso.err &
+
+#randomized scores  
+srun -p med -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
+ $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/37.rand \
+ -GL 1 -nThreads 12 -minInd 18 \
+ -minMapQ 10 -minQ 20 -minMaf 0.05 \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/102/do-asso-rand \
+  -bam bamlists/37.bamlist > outputs/201/do-asso-rand.out 2> outputs/201/do-asso-rand.err &
+```
+
+	-> Number of sites retained after filtering: 62429 with chroms only
+		-> Number of sites retained after filtering: 74667 with all seqs
+
+
+```{r}
+data<-read_tsv("outputs/102/do-asso.lrt0.gz")
+```
+
+```{r}
+df <- data %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
+  filter(log10p>=0 & log10p != "Inf") %>%
+  mutate(p = dchisq(LRT, df=1)) %>%
+  mutate(bonfer = p.adjust(p, method = "bonferroni")) %>% 
+  mutate(BHfdr = p.adjust(p, method = "BH")) %>%
+  group_by(Chromosome) %>%
+  mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
+  mutate(BHfdrchrom = p.adjust(p, method = "BH"))
+
+dfs<-df %>% arrange(-LRT) %>% head(n=20)
+dfs
+```
+
+```{r}
+nb.cols <- length(unique(df$Chromosome))
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+#randomize
+mycolors<-sample(mycolors)
+```
+
+```{r}
+ggplot(df %>% filter(Chromosome %in% unique(dfs$Chromosome))) +
+  geom_point(aes(x=Position, y=log10p, color=Chromosome), alpha=0.75, cex=0.5) +
+ # geom_hline(yintercept = -log10(0.05/nrow(dddf)), col="black", linetype=2, alpha=0.5) +
+  geom_hline(yintercept= 4, col="black", linetype=1, alpha=0.5) +
+  theme_bw() +
+#  scale_x_continuous(breaks=chroms$Position, labels=chroms$Chromosome) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=8)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  ylab("-log10(p)\n") +
+  xlab("\nChromosome") +
+  ggtitle("HS vs LS") +
+  theme(plot.title = element_text(hjust=0.5) ) +
+  theme(plot.subtitle = element_text(hjust=0.5)) +
+  facet_wrap(.~Chromosome, ncol = 5, scales="free_x") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+
+ggsave("outputs/102/longfin-HS-LS-dsm-genome.pdf")
+```
+
+## random phenos
+
+74678 
+```{r}
+data<-read_tsv("outputs/102/do-asso-rand.lrt0.gz")
+```
+
+```{r}
+df <- data %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
+  filter(log10p>=0 & log10p != "Inf") %>%
+  mutate(p = dchisq(LRT, df=1)) %>%
+  mutate(bonfer = p.adjust(p, method = "bonferroni")) %>% 
+  mutate(BHfdr = p.adjust(p, method = "BH")) %>%
+  group_by(Chromosome) %>%
+  mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
+  mutate(BHfdrchrom = p.adjust(p, method = "BH"))
+
+dfs<-df %>% arrange(-LRT) %>% head(n=20)
+dfs
+```
+
+```{r}
+nb.cols <- length(unique(df$Chromosome))
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+#randomize
+mycolors<-sample(mycolors)
+```
+
+```{r}
+ggplot(df %>% filter(Chromosome %in% unique(dfs$Chromosome))) +
+  geom_point(aes(x=Position, y=log10p, color=Chromosome), alpha=0.75, cex=0.5) +
+ # geom_hline(yintercept = -log10(0.05/nrow(dddf)), col="black", linetype=2, alpha=0.5) +
+  geom_hline(yintercept= 4, col="black", linetype=1, alpha=0.5) +
+  theme_bw() +
+#  scale_x_continuous(breaks=chroms$Position, labels=chroms$Chromosome) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=8)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  ylab("-log10(p)\n") +
+  xlab("\nChromosome") +
+  ggtitle("HS vs LS") +
+  theme(plot.title = element_text(hjust=0.5) ) +
+  theme(plot.subtitle = element_text(hjust=0.5)) +
+  facet_wrap(.~Chromosome, ncol = 5, scales="free_x") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+
+ggsave("outputs/102/longfin-HS-LS-dsm-genome-rand.pdf")
+```
