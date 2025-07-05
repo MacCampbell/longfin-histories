@@ -36,6 +36,8 @@ srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/205/snps.out 2> outputs/205/snps.err &
 
 #Number of snps
+#	-> Number of sites retained after filtering: 62773 
+
 
 #create vcf
 plink --tped snps-wgs.tped --tfam snps-wgs.tfam  --out plink-binary --recode --allow-extra-chr --noweb
@@ -45,4 +47,106 @@ module load bcftools
 bcftools reheader -s ../../bamlists/yak.names -o plink-renamed.vcf plink.vcf
 bcftools +fill-tags plink-renamed.vcf | bcftools view -i 'F_MISSING < 0.10' | bcftools view -i 'INFO/MAF > 0.01' > filtered.vcf
 bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered.vcf > plink-pruned.vcf
+```
+
+
+
+```{r}
+snps<-import.snpR.data(genotypes = "outputs/205/plink-pruned.vcf", 
+      sample.meta = yak)
+```
+
+```{r}
+p <- plot_clusters(snps, facets = c("Pop"), viridis.option = "H")
+p$plot$pca
+```
+
+What!
+
+## LD
+
+```{sh, eval=FALSE}
+
+cat outputs/200/long-seqs.tsv  | while read line; do bcftools view -Ov -r $line outputs/205/filtered.vcf.gz > outputs/205/vcfs/$line.vcf; done;
+
+for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basename $f vcf`ldf --allow-extra-chr --double-id; done;
+
+```
+
+```{r, eval=FALSE}
+files<-list.files("outputs/205/vcfs",pattern = "*.ldf.ld", full.names = TRUE)
+
+plotLd<-function(file) {
+  chrom<-gsub("outputs/205/vcfs/","",file)
+  chrom<-gsub(".ldf.ld","", chrom)
+  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.5)
+
+  ggplot(lc) +
+  geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle(paste0(chrom))+
+  theme_bw() +
+  theme(panel.grid = element_blank())
+ggsave(paste0("outputs/205/chrom-ld/",chrom,".pdf"))
+}
+
+lapply(files, plotLd)
+```
+
+
+Scaffold 28 is interesting
+
+```{r}
+lc<-read.delim("outputs/205/vcfs/lcl|scaffold_28.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.2)
+
+  ggplot(lc) +
+  geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle("lcl|scaffold_28 LD")+
+  theme_bw() +
+  theme(panel.grid = element_blank())
+  
+ggsave("outputs/205/scaffold28-ld-plot.pdf")
+```
+
+Chrom PCS
+
+```{r, eval=FALSE}
+files<-list.files("outputs/205/vcfs",pattern = "*.vcf", full.names = TRUE)
+
+plotPCA<-function(file) {
+  meta<-yak
+  chrom<-gsub("outputs/205/vcfs/","",file)
+  chrom<-gsub(".vcf","", chrom)
+  
+  vcf<-read.vcfR(file=file)
+  genind<-vcfR2genind(vcf)
+  genind@pop<-as.factor(meta$Pop)
+
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(meta)
+eig<-pca1$eig/sum(pca1$eig)*100
+
+
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=Pop),pch=21, alpha=0.75, cex=2) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="H") +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") +
+  geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
+pc12
+
+ggsave(paste0("outputs/205/chrom-pcs/",chrom,".pdf"))
+}
+
+lapply(files, plotPCA)
 ```
