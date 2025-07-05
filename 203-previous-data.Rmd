@@ -16,3 +16,58 @@ Putting in data/saglam with symlinks
 
 to-align.txt
 
+```{sh, eval=FALSE}
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/longfin-chrom/lfs_final_scaff_assembly.fasta
+```
+
+
+get stats...
+
+
+```{r}
+sf<-read_csv("meta/saglam.csv", col_names = c("SampleID","Aligned","Dedup","Cov")) %>% mutate(Path=paste0("data/saglam/",SampleID,".sort.flt.bam"))
+sf$Pop<-gsub("_\\d+","",sf$SampleID)
+sf
+```
+
+```{r}
+ggplot(sf) +
+  geom_histogram(aes(x=Dedup)) +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  ylab("Count")
+```
+
+
+```{r}
+median(sf$Dedup)
+```
+
+Can probably downsample some seqs.
+
+In the meantime, pulling some fish from SF Bay. I recall some of these weren't longfin, but which ones?
+
+```{r}
+bay<-sf %>% filter(Pop %in% c("SFB", "PETA", "ALVS", "SUIB", "CHPI")) %>% filter(Dedup > 4e5)
+bay %>% group_by(Pop) %>% summarize(Count=n(), Median=median(Dedup))
+```
+
+43 samples
+
+```{r}
+bay %>% select(Path) %>% write_tsv("bamlists/sf43.bamlist")
+bay %>% select(SampleID) %>% write_tsv("bamlists/sf43.names")
+```
+
+Quickly check one chrom, lcl|scaffold_1
+
+```{sh, eval=FALSE}
+srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12  $HOME/angsd/angsd -P 12  \
+-bam bamlists/sf43.bamlist -ref /home/maccamp/genomes/longfin-chrom/lfs_final_scaff_assembly.fasta \
+-r lcl|scaffold_1 \
+-minInd 33 -minMapQ 20 -minQ 20 -GL 2 -doGLF 2 \
+-doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doIBS 1 -doCounts 1 -doCov 1 -makeMatrix 1 -minMaf 0.05 \
+-out outputs/203/sf43-ibs-75 >outputs/203/sf43-ibs-75.out 2> outputs/203/sf43-ibs-75.err &
+```
+
