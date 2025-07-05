@@ -8,6 +8,13 @@ date: "2025-07-04"
 knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message = FALSE)
 ```
 
+```{r}
+library(tidyverse)
+library(snpR)
+library(adegenet)
+library(vcfR)
+library(ggrepel)
+```
 What about the Saglam et al. data?
 
 /home/maccamp/data/forage-fishes/longfin-previous
@@ -371,3 +378,28 @@ tops$Chrom<-gsub("_1_.*$",".1",tops$Allele)
 
 tops
 ```
+
+lcl|scaffold_28	2160110	lcl|scaffold_28_2160110	G	A	.	.	PR;F_MISSING=0;NS=43;AN=86;AF=0.290698;MAF=0.290698;AC=25;AC_Het=23;AC_Hom=2;AC_Hemi=0;HWE=0.0737253;ExcHet=0.0590054	GT	0/0	0/0	0/0	0/1	0/0	0/0	0/1	0/1	0/1	0/1	0/1 1/1	0/1	0/1	0/1	0/0	0/0	0/1	0/1	0/1	0/0	0/1	0/0	0/1	0/0	0/1	0/1	0/1	0/1	0/10/0	0/0	0/1	0/0	0/1	0/0	0/1	0/0	0/0	0/1	0/0	0/0	0/0
+(base) ➜  vcfs git:(main) ✗ grep 1917056 lcl\|scaffold_28.vcf 
+lcl|scaffold_28	1917056	lcl|scaffold_28_1917056	C	A	.	.	PR;F_MISSING=0;NS=43;AN=86;AF=0.27907;MAF=0.27907;AC=24;AC_Het=24;AC_Hom=0;AC_Hemi=0;HWE=0.0183276;ExcHet=0.0108235	GT	0/0	0/0	0/0	0/1	0/0	0/0	0/1	0/1	0/1	0/1	0/1	0/1 0/1	0/1	0/1	0/0	0/0	0/1	0/1	0/1	0/0	0/1	0/0	0/1	0/0	0/1	0/1	0/1	0/1	0/1	0/0 0/0	0/1	0/0	0/1	0/0	0/1	0/0	0/0	0/1	0/0	0/0	0/0
+
+## What about other pops?
+
+Ahw, crap. SFBY
+
+```{r}
+sf %>% filter(!Pop %in% c("SFB", "PETA", "ALVS", "SUIB", "CHPI")) %>% filter(Dedup > 4e5) %>% group_by(Pop) %>%
+  summarize(Count=n())
+
+```
+
+
+```{r}
+yak<-sf %>% filter(Pop %in% c("YBAK")) %>% filter(Dedup > 4e5) 
+yak %>% write_csv("meta/yak.csv")
+
+bay2<-sf %>% filter(Pop %in% c("SFB","SFBY", "PETA", "ALVS", "SUIB", "CHPI")) %>% filter(Dedup > 4e5) 
+bay2 %>% write_csv("meta/bay2.csv")
+```
+
+Can redo bay2 in 204
