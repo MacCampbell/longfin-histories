@@ -389,6 +389,7 @@ pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
 
 df<-pca1$li
 df<-df %>% bind_cols(meta)
+eig<-pca1$eig/sum(pca1$eig)*100
 
 
 pc12<-ggplot(df) + 
