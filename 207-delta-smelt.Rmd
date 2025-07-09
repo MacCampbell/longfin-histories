@@ -29,4 +29,8 @@ Need to convert to fastqs
  # this is going to take forever!! Hahahah
  cat samples.txt | while read line; do samtools fastq "$line"_R1.sort.bam -1 $line-R1.fastq.gz -2 $line-R2.fastq.gz; done;
 
- ```
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
+
+```
+ 
+ 

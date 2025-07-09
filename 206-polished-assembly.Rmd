@@ -32,6 +32,36 @@ Linking in data from: /home/maccamp/data/forage-fishes/longfin-previous
 to /home/maccamp/longfin-histories/data/polish-saglam
 
 ```{sh, eval=FALSE}
-bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/longfin-polished//lfs_run3_scaffolds_final.fa
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
+```
 
+Lots of stuff on the farm! Hope it works.
+
+
+Trying YBAK
+
+
+```{r}
+library(tidyverse)
+library(snpR)
+library(adegenet)
+library(vcfR)
+library(ggrepel)
+```
+
+```{r}
+yak<-read_csv("meta/yak.csv") %>% select(-Aligned, -Dedup, -Cov)
+yak$Path<-gsub("saglam","polish-saglam",yak$Path)
+yak %>% select(Path) %>% write_tsv("bamlists/yak-polish.bamlist", col_names = FALSE)
+yak %>% select(SampleID) %>% write_tsv("bamlists/yak-polish.names", col_names = FALSE)
+```
+
+Call snps
+
+```{sh, eval=FALSE}
+srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 18 -bam bamlists/yak-polish.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-out outputs/206/snps-wgs  \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/206/snps.out 2> outputs/206/snps.err &
 ```
