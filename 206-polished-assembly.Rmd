@@ -1,0 +1,37 @@
+---
+title: "206-polished-assembly"
+output: html_document
+date: "2025-07-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message=FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(snpR)
+library(adegenet)
+library(vcfR)
+library(ggrepel)
+```
+
+
+/home/skieran/lfs/genome/lfs_run3_final/lfs_run3_scaffolds_final.fa
+
+sym link to here:
+
+/home/maccamp/genomes/longfin-polished/
+
+```{sh, eval=FALSE}
+module load bwa
+srun -t 2:00:00 -p high --mem=16G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 bwa index lfs_run3_scaffolds_final.fa
+```
+
+Linking in data from: /home/maccamp/data/forage-fishes/longfin-previous
+to /home/maccamp/longfin-histories/data/polish-saglam
+
+```{sh, eval=FALSE}
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/longfin-polished//lfs_run3_scaffolds_final.fa
+
+```

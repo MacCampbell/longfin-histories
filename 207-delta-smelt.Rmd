@@ -1,0 +1,32 @@
+---
+title: "207-delta-smelt"
+output: html_document
+date: "2025-07-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+Need to convert .sorted.bam to fastqs
+
+
+Using the test80.bamlist in dsm-omics/test80.bamlist, also test80.pheno:
+1 /home/maccamp/dsm-omics/data/SOMM516/121922_R1.sort.flt.bam
+1 /home/maccamp/dsm-omics/data/SOMM516/401432_R1.sort.flt.bam
+1 /home/maccamp/dsm-omics/data/SOMM516/402282_R1.sort.flt.bam
+1 /home/maccamp/dsm-omics/data/SOMM516/500742_R1.sort.flt.bam
+0 /home/maccamp/dsm-omics/data/SOMM516/130081_R1.sort.flt.bam etc.
+0 Sex is based on the sample name.
+
+(base) maccamp@farm:~/dsm-omics/data/fastq$ cat ../../bamlists/test80.bamlist | perl -pe 's/.flt//g'  | while read line; do ln -s $line ./ ; done;
+mv fastq to /home/maccamp/longfin-histories/data/fastq
+
+Need to convert to fastqs
+
+```{sh, eval=FALSE}
+ ls | grep .bam | perl -pe 's/_R1.sort.bam//g'  > samples.txt
+ # this is going to take forever!! Hahahah
+ cat samples.txt | while read line; do samtools fastq "$line"_R1.sort.bam -1 $line-R1.fastq.gz -2 $line-R2.fastq.gz; done;
+
+ ```

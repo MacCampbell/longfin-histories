@@ -171,12 +171,12 @@ p <- plot_clusters(snps, facets = c("Pop"), viridis.option = "H")
 p$plot$pca
 ```
 
-```{r}
+```{r, eval=FALSE, echo=FALSE, message=FALSE}
 str<-plot_structure(snps, k = c(1,2,3,4))
 str$K_plot
 ```
 
-```{r}
+```{r, eval=FALSE, echo=FALSE, message=FALSE}
 str$plot
 ```
 
@@ -202,7 +202,7 @@ eig<-pca1$eig/sum(pca1$eig)*100
 
 ```{r}
 pc12<-ggplot(df) + 
-  geom_point(aes(x=Axis1, y=Axis2, fill=Pop), alpha=0.75, cex=2) +
+  geom_point(aes(x=Axis1, y=Axis2, fill=Pop), alpha=0.75, cex=2, pch=21) +
   theme_bw() +
   xlab(paste0("PC1 ",round(eig[1],2), "%")) +
   ylab(paste0("PC2 ",round(eig[2],2), "%")) +
@@ -218,32 +218,24 @@ ggsave("outputs/200/lfs-pruned-pca.pdf")
 
 ```{r}
 loadings<-pca1$c1 %>% as_tibble()
-loadings$Allele<-rownames(pca1$c1)  
-loadings$Position<-gsub("NC_.*_|\\.\\d$","",loadings$Allele)
+loadings$Allele<-rownames(pca1$c1) 
+loadings$Position<-gsub("lcl\\|.*_|\\.\\d$","",loadings$Allele)
 loadings$Position<-as.numeric(loadings$Position)
-
+loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
 tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .01) %>% select(-CS2, -CS3) %>% 
-  mutate(MajorMinor=gsub("NC.*\\.","",Allele)) 
-tops$Chrom<-gsub("_1_.*$",".1",tops$Allele)
+  mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
 
-tops
+tops %>% relocate(Chrom, Position, CS1)
 
 
-tops<-loadings %>% arrange(-CS2) %>% slice_max(order_by = CS2,prop = .01) %>% select(-CS1, -CS3) %>% 
-  mutate(MajorMinor=gsub("NC.*\\.","",Allele)) 
-tops$Chrom<-gsub("_1_.*$",".1",tops$Allele)
-
-tops
 ```
 
 ## LD
 
 ```{sh, eval=FALSE}
-
 cat outputs/200/long-seqs.tsv  | while read line; do bcftools view -Ov -r $line outputs/203/filtered.vcf.gz > outputs/203/vcfs/$line.vcf; done;
 
 for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basename $f vcf`ldf --allow-extra-chr --double-id; done;
-
 ```
 
 ```{r, eval=FALSE}
@@ -347,7 +339,7 @@ eig<-pca1$eig/sum(pca1$eig)*100
 
 ```{r}
 pc12<-ggplot(df) + 
-  geom_point(aes(x=Axis1, y=Axis2, fill=Pop), alpha=0.75, cex=2) +
+  geom_point(aes(x=Axis1, y=Axis2, fill=Pop), alpha=0.75, cex=2, pch=21) +
   theme_bw() +
   xlab(paste0("PC1 ",round(eig[1],2), "%")) +
   ylab(paste0("PC2 ",round(eig[2],2), "%")) +
@@ -361,26 +353,21 @@ pc12
 
 ```{r}
 loadings<-pca1$c1 %>% as_tibble()
-loadings$Allele<-rownames(pca1$c1)  
-loadings$Position<-gsub("NC_.*_|\\.\\d$","",loadings$Allele)
+loadings$Allele<-rownames(pca1$c1) 
+
+loadings
+loadings$Position<-gsub("lcl\\|.*_|\\.\\d$","",loadings$Allele)
 loadings$Position<-as.numeric(loadings$Position)
-
+loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
 tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .01) %>% select(-CS2, -CS3) %>% 
-  mutate(MajorMinor=gsub("NC.*\\.","",Allele)) 
-tops$Chrom<-gsub("_1_.*$",".1",tops$Allele)
+  mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
 
-tops
+tops %>% relocate(Chrom, Position, CS1)
 
-
-tops<-loadings %>% arrange(-CS2) %>% slice_max(order_by = CS2,prop = .01) %>% select(-CS1, -CS3) %>% 
-  mutate(MajorMinor=gsub("NC.*\\.","",Allele)) 
-tops$Chrom<-gsub("_1_.*$",".1",tops$Allele)
-
-tops
 ```
 
 lcl|scaffold_28	2160110	lcl|scaffold_28_2160110	G	A	.	.	PR;F_MISSING=0;NS=43;AN=86;AF=0.290698;MAF=0.290698;AC=25;AC_Het=23;AC_Hom=2;AC_Hemi=0;HWE=0.0737253;ExcHet=0.0590054	GT	0/0	0/0	0/0	0/1	0/0	0/0	0/1	0/1	0/1	0/1	0/1 1/1	0/1	0/1	0/1	0/0	0/0	0/1	0/1	0/1	0/0	0/1	0/0	0/1	0/0	0/1	0/1	0/1	0/1	0/10/0	0/0	0/1	0/0	0/1	0/0	0/1	0/0	0/0	0/1	0/0	0/0	0/0
-(base) ➜  vcfs git:(main) ✗ grep 1917056 lcl\|scaffold_28.vcf 
+
 lcl|scaffold_28	1917056	lcl|scaffold_28_1917056	C	A	.	.	PR;F_MISSING=0;NS=43;AN=86;AF=0.27907;MAF=0.27907;AC=24;AC_Het=24;AC_Hom=0;AC_Hemi=0;HWE=0.0183276;ExcHet=0.0108235	GT	0/0	0/0	0/0	0/1	0/0	0/0	0/1	0/1	0/1	0/1	0/1	0/1 0/1	0/1	0/1	0/0	0/0	0/1	0/1	0/1	0/0	0/1	0/0	0/1	0/0	0/1	0/1	0/1	0/1	0/1	0/0 0/0	0/1	0/0	0/1	0/0	0/1	0/0	0/0	0/1	0/0	0/0	0/0
 
 ## What about other pops?
