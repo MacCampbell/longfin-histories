@@ -90,7 +90,7 @@ TGCCCGTGCAGGCAAACCTCCTGCGCTGGTACTCATTCATATCTATCACCTGGAGAGAGACAGGGTCATATCTATCACCT
 What is the encoding here?
 
 Getting the top hits:
-451216 ACTGGCTGCAGG
+ 451216 ACTGGCTGCAGG
  462997 CACCTCTGCAGG
  469269 GGGGCGTGCAGG
  480977 ACTCTTTGCAGG
@@ -170,4 +170,23 @@ Getting the top hits:
  
 ```{sh}
 srun -t 8:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 ~/fastq-multx/fastq-multx -B 206.barcodes SRR1786609.sralite.1_pass.fastq.gz -o %.fq.gz
+```
+
+About 6 GB of unamatched FQ
+
+Expected 934744 reads and had 877895 reads.
+
+../../208-do-align-single.sh samples.list /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
+
+```{r}
+eul<-read_tsv("206.barcodes", col_names = c("SampleID","Barcode")) %>% mutate(Path=paste0("data/eul/",SampleID,".sort.bam"))
+eul %>% select(Path) %>% write_tsv("bamlists/eul73.bamlist",col_names = FALSE)
+```
+
+```{sh, eval=FALSE}
+srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 66 -bam bamlists/eul73.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-out outputs/208/snps-wgs  \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/208/snps.out 2> outputs/208/snps.err &
 ```

@@ -1,7 +1,7 @@
 #!/bin/bash -l
 
 ## usage
-##
+## ../../208-do-align-single.sh samples.list /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
 
 list=$1
 ref=$2
@@ -20,11 +20,11 @@ do
 
 
 	echo "#!/bin/bash -l
-  module load bwa/0.7.17;
+  module load bwa/0.7.17
 
 	bwa mem $ref ${c1}.fq.gz | samtools view -Sb - | samtools sort - -o ${c1}.sort.bam 
   reads=\$(samtools view -c ${c1}.sort.bam)
-  echo \"${c1},\${reads}\ > > ${c1}.stats" > ${c1}.sh
+  echo \"${c1},\${reads}\" > ${c1}.stats" > ${c1}.sh
 	sbatch -t 1-8:00:00 -p med --mem=10G ${c1}.sh
 
 	x=$(( $x + 1 ))
