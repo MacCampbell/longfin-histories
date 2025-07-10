@@ -179,8 +179,9 @@ Expected 934744 reads and had 877895 reads.
 ../../208-do-align-single.sh samples.list /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
 
 ```{r}
-eul<-read_tsv("206.barcodes", col_names = c("SampleID","Barcode")) %>% mutate(Path=paste0("data/eul/",SampleID,".sort.bam"))
+eul<-read_tsv("206.barcodes", col_names = c("SampleID","Barcode")) %>% mutate(Path=paste0("data/eul/",SampleID,".sort.bam")) %>% mutate(Pop="Unknown")
 eul %>% select(Path) %>% write_tsv("bamlists/eul73.bamlist",col_names = FALSE)
+eul %>% select(SampleID) %>% write_tsv("bamlists/eul73.names",col_names = FALSE)
 ```
 
 ```{sh, eval=FALSE}
@@ -189,4 +190,188 @@ srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task
 -out outputs/208/snps-wgs  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/208/snps.out 2> outputs/208/snps.err &
+```
+
+
+## Copy from here and change as necessary
+
+
+```{sh, eval=FALSE}
+#create vcf
+plink --tped snps-wgs.tped --tfam snps-wgs.tfam  --out plink-binary --recode --allow-extra-chr --noweb
+plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-chr -out plink
+
+module load bcftools
+bcftools reheader -s ../../bamlists/eu73.names -o plink-renamed.vcf plink.vcf
+bcftools +fill-tags plink-renamed.vcf | bcftools view -i 'F_MISSING < 0.10' | bcftools view -i 'INFO/MAF > 0.01' > filtered.vcf
+bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered.vcf > plink-pruned.vcf
+```
+
+
+Basic PCA
+
+```{r}
+snps<-import.snpR.data(genotypes = "outputs/208/plink-pruned.vcf", 
+      sample.meta = yak)
+```
+
+```{r}
+p <- plot_clusters(snps, facets = c("Pop"), viridis.option = "H")
+p$plot$pca
+```
+
+
+
+
+## LD
+
+```{sh, eval=FALSE}
+#long seqs are > 884174 bp
+cat outputs/206/long-seqs.tsv  | while read line; do bcftools view -Ov -r $line outputs/208/filtered.vcf.gz > outputs/208/vcfs/$line.vcf; done;
+
+for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basename $f vcf`ldf --allow-extra-chr --double-id; done;
+
+```
+
+```{r, eval=FALSE}
+files<-list.files("outputs/208/vcfs",pattern = "*.ldf.ld", full.names = TRUE)
+
+plotLd<-function(file) {
+  chrom<-gsub("outputs/208/vcfs/","",file)
+  chrom<-gsub(".ldf.ld","", chrom)
+  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.5)
+
+  ggplot(lc) +
+  geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle(paste0(chrom))+
+  theme_bw() +
+  theme(panel.grid = element_blank())
+ggsave(paste0("outputs/208/chrom-ld/",chrom,".pdf"))
+}
+
+lapply(files, plotLd)
+```
+
+
+Scaffold 26 is interesting
+
+```{r}
+lc<-read.delim("outputs/208/vcfs/lcl|scaffold_26.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.2)
+
+  ggplot(lc) +
+  geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle("lcl|scaffold_26 LD")+
+  theme_bw() +
+  theme(panel.grid = element_blank()) 
+  
+ggsave("outputs/208/scaffold26-ld-plot.pdf")
+```
+
+````{r}
+ggplot(lc) +
+  geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle("lcl|scaffold_26 LD")+
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  xlim(8.25e6, max(lc$BP_A))
+```
+
+```{sh, eval=FALSE}
+bcftools view -Ov -r 'lcl|scaffold_26:8250000-' outputs/208/filtered.vcf.gz > outputs/208/lcl26-sub.vcf
+```
+
+
+Chrom PCS
+
+```{r, eval=FALSE}
+files<-list.files("outputs/208/vcfs",pattern = "*.vcf", full.names = TRUE)
+
+plotPCA<-function(file) {
+  meta<-yak
+  chrom<-gsub("outputs/208/vcfs/","",file)
+  chrom<-gsub(".vcf","", chrom)
+  
+  vcf<-read.vcfR(file=file)
+  genind<-vcfR2genind(vcf)
+  genind@pop<-as.factor(meta$Pop)
+
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(meta)
+eig<-pca1$eig/sum(pca1$eig)*100
+
+
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=Pop),pch=21, alpha=0.75, cex=2) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="H") +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") +
+  geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
+pc12
+
+ggsave(paste0("outputs/208/chrom-pcs/",chrom,".pdf"))
+}
+
+lapply(files, plotPCA)
+```
+
+
+## Check loadings
+```{r}
+vcf<-read.vcfR(file="outputs/208/lcl26-sub.vcf")
+genind<-vcfR2genind(vcf)
+genind@pop<-as.factor(yak$Pop)
+```
+
+
+```{r}
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(yak)
+
+eig<-pca1$eig/sum(pca1$eig)*100
+```
+
+```{r}
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=Pop), alpha=0.75, cex=2, pch=21) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="H") +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") +
+  geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
+pc12
+```
+
+```{r}
+loadings<-pca1$c1 %>% as_tibble()
+loadings$Allele<-rownames(pca1$c1) 
+
+loadings
+loadings$Position<-gsub("lcl\\|.*_|\\.\\d$","",loadings$Allele)
+loadings$Position<-as.numeric(loadings$Position)
+loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .01) %>% select(-CS2, -CS3) %>% 
+  mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
+
+tops %>% relocate(Chrom, Position, CS1)
+
 ```
