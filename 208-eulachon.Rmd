@@ -1,0 +1,169 @@
+---
+title: "208-eulachon"
+output: html_document
+date: "2025-07-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+https://www.ncbi.nlm.nih.gov/sra?linkname=bioproject_sra_all&from_uid=274282
+
+Some sequencing is single ended some is paired end
+
+Design: Restriction site associated (RAD) sequencing was done on a sample of 494 individual Pacific Eulachon. Sbf1 was used as the restriction enzyme. This library was paired end sequenced in order to create scaffolds of interesting RAD loci. The individual samples contained in this library are the same as those in DFO_Tpa_L0124.fastq. 28.4G
+
+
+Run	# of Spots	# of Bases	Size	Published
+SRR1786609	156,074,772	15.8G	10.5Gb	2016-02-03
+SRR1786610	213,923,577	21.6G	14.4Gb	2016-02-03
+SRR1786611	219,066,721	22.1G	14.8Gb	2016-02-03
+SRR1786612	189,237,566	19.1G	12.1Gb	2016-02-03
+SRR1786613	171,647,080	17.3G	10.8Gb	2016-02-03
+SRR1786614	168,511,175	17G	10.6Gb	2016-02-03
+SRR1786615	187,543,719	18.9G	12.1Gb	2016-02-03
+SRR1786617	201,444,434	20.3G	13.4Gb	2016-02-03
+SRR1786618	194,039,214	19.6G	12.6Gb	2016-02-03
+
+wget https://sra-downloadb.be-md.ncbi.nlm.nih.gov/sos5/sra-pub-zq-11/SRR001/786/SRR1786609/SRR1786609.sralite.1 
+Will download and split
+
+module load sratoolkit
+
+fastq-dump --outdir ./ --gzip --skip-technical --read-filter pass --clip SRR1786609.sralite.1   
+
+Check barcodes and compare to ~/scripts
+BarcodeList.txt
+BarcodeListRev.txt
+BarcodeSplit.pl
+
+Potential barcodes in BarcodeList.txt
+AAACGG,AACGTT,AACTGA
+
+At the start of reads:
+ATTCCGTGCAGG
+ATTCCG
+
+TAATTC
+TAATTCTGCAGG
+
+These look to be in our BarcodeList.txt file...
+trying to run like so in ~/longfin-histories/data/eul     
+
+```{sh, eval=FALSE}
+./BarcodeSplit.pl SRR1786609.sralite.1_pass.fastq.gz BarcodeList.txt 
+```
+
+Make barcodes:
+grep "^\w{6}TGCAGG"
+
+gunzip -c SRR1786609.sralite.1_pass.fastq.gz | grep "^\w\w\w\w\w\wTGCAGG" | cut -c1-12 | sort | uniq -c > bs.txt
+
+fastq-multx should work with inline barcodes
+fastq-multx -B barcodes.tsv SRR1786609.sralite.1_pass.fastq.gz -o %.fq.gz
+
+Sample1 TGCCCGTGCAGG
+Sample2 AACGTTTGCAGG
+
+DO NOT put a newline at the end of this
+
+dummy trial
+```{sh}
+~/fastq-multx/fastq-multx -B barcodes.tsv SRR1786609.sralite.1_pass.fastq.gz -o %.fq.gz
+```
+
+Does seem to work, and clips out the barcodes,
+Sample 1 TGCCCGTGCAGG
+
+@SRR1786609.sralite.1.1519132 BZH9VV1:53:D1FAPACXX:1:1102:13311:70218 length=101
+CAAACCTCCTGCGCTGGTACTCATTCATATCTATCACCTGGAGAGAGACAGGGTCATATCTATCACCTGGAGAGAGACAGGGTCATATC
++SRR1786609.sralite.1.1519132 BZH9VV1:53:D1FAPACXX:1:1102:13311:70218 length=101
+?????????????????????????????????????????????????????????????????????????????????????????
+
+
+@SRR1786609.sralite.1.1519132 BZH9VV1:53:D1FAPACXX:1:1102:13311:70218 length=101
+TGCCCGTGCAGGCAAACCTCCTGCGCTGGTACTCATTCATATCTATCACCTGGAGAGAGACAGGGTCATATCTATCACCTGGAGAGAGACAGGGTCATATC
++SRR1786609.sralite.1.1519132 BZH9VV1:53:D1FAPACXX:1:1102:13311:70218 length=101
+?????????????????????????????????????????????????????????????????????????????????????????????????????
+
+What is the encoding here?
+
+Getting the top hits:
+451216 ACTGGCTGCAGG
+ 462997 CACCTCTGCAGG
+ 469269 GGGGCGTGCAGG
+ 480977 ACTCTTTGCAGG
+ 486111 CAAAAATGCAGG
+ 493721 TACACATGCAGG
+ 497850 CAGGCATGCAGG
+ 516012 CGCAGATGCAGG
+ 526687 TACGGGTGCAGG
+ 534373 AACTGATGCAGG
+ 535241 CAATCGTGCAGG
+ 537453 GAACCATGCAGG
+ 541918 AGCGCATGCAGG
+ 548433 GACGACTGCAGG
+ 555380 ATTCCGTGCAGG
+ 558056 AGGTGTTGCAGG
+ 560981 CGGTCCTGCAGG
+ 567597 AGGGTCTGCAGG
+ 567599 GATCGTTGCAGG
+ 572025 CGCGTGTGCAGG
+ 572229 GGTACATGCAGG
+ 589308 AGTAGGTGCAGG
+ 591980 AACGTTTGCAGG
+ 595056 AGCCATTGCAGG
+ 596006 ATCAAATGCAGG
+ 598240 AATATCTGCAGG
+ 605265 CGTGATTGCAGG
+ 606219 CCCGGTTGCAGG
+ 609201 GGGCGCTGCAGG
+ 611698 ACAAGATGCAGG
+ 614229 CCATTTTGCAGG
+ 617672 GAAATGTGCAGG
+ 617829 TCCTGCTGCAGG
+ 626683 GCCGTATGCAGG
+ 635629 CGAGGCTGCAGG
+ 639756 TCGATTTGCAGG
+ 645367 GGCAAGTGCAGG
+ 660971 CCCTAATGCAGG
+ 661373 GCAGATTGCAGG
+ 663281 TGAACCTGCAGG
+ 663489 CTGCGATGCAGG
+ 665646 TAATTCTGCAGG
+ 671786 TTCTAGTGCAGG
+ 673093 CATACTTGCAGG
+ 676030 GAGAGATGCAGG
+ 677416 AAGCTATGCAGG
+ 685562 GACTCTTGCAGG
+ 688247 CGTCTATGCAGG
+ 690491 ACATACTGCAGG
+ 698996 TGACAATGCAGG
+ 700049 ATAGTATGCAGG
+ 702150 GTCATCTGCAGG
+ 703280 GTATCCTGCAGG
+ 710724 TGGGGATGCAGG
+ 715628 AGTTAATGCAGG
+ 722666 TAGTATTGCAGG
+ 723033 TTCCGTTGCAGG
+ 727590 CTCGCCTGCAGG
+ 740233 TCTTCTTGCAGG
+ 741536 TATCACTGCAGG
+ 760282 GCATGGTGCAGG
+ 762408 ACAGCGTGCAGG
+ 769168 AATGAGTGCAGG
+ 769391 GTAAGTTGCAGG
+ 770368 TCAAAGTGCAGG
+ 791617 TGCCCGTGCAGG
+ 802357 TAAGCTTGCAGG
+ 804467 GGACTTTGCAGG
+ 828896 GGTTTGTGCAGG
+ 838381 TTATGATGCAGG
+ 838793 CTACAGTGCAGG
+ 855944 AAGACGTGCAGG
+ 934744 TGCTTATGCAGG
+ 
+ Created 206 barcodes file
+ 
+ 206.barcodes, now we can try this thing

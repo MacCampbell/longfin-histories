@@ -27,7 +27,18 @@ Need to convert to fastqs
 ```{sh, eval=FALSE}
  ls | grep .bam | perl -pe 's/_R1.sort.bam//g'  > samples.txt
  # this is going to take forever!! Hahahah
- cat samples.txt | while read line; do samtools fastq "$line"_R1.sort.bam -1 $line-R1.fastq.gz -2 $line-R2.fastq.gz; done;
+ cat samples.txt | while read line; do samtools fastq "$line"_R1.sort.bam -n -1 $line-R1.fastq.gz -2 $line-R2.fastq.gz -0 /dev/null -s /dev/null ; done; # doesn't work because the files were sorted. Sigh.
+
+```
+
+
+Retrieving from barbera, and that is still extant!
+```{sh, eval=FALSE}
+~/data/delta-smelt-omics$ scp -r maccampbell@barbera.genomecenter.ucdavis.edu:/share/schreierlab/smelt-wgs/demulti* ./ 
+```
+
+
+Symlink to dsm subdir
 
 bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
 
