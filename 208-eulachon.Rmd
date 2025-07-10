@@ -167,3 +167,7 @@ Getting the top hits:
  Created 206 barcodes file
  
  206.barcodes, now we can try this thing
+ 
+```{sh}
+srun -t 8:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 ~/fastq-multx/fastq-multx -B 206.barcodes SRR1786609.sralite.1_pass.fastq.gz -o %.fq.gz
+```
