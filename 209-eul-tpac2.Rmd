@@ -1,0 +1,50 @@
+---
+title: "209-eul-tpac2"
+output: html_document
+date: "2025-07-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+
+```{r}
+library(tidyverse)
+library(snpR)
+library(adegenet)
+library(vcfR)
+library(ggrepel)
+```
+
+
+Using the Tpac2 reference to look for interesting things. 
+
+/home/maccamp/genomes/tpac2/GCA_023658055.1_Tpac_2.0_genomic.fna
+
+data in data/eul-tpac2
+chromlist is /home/maccamp/genomes/tpac2/chroms.txt
+
+running align
+
+../../208-do-align-single.sh samples.list /home/maccamp/genomes/tpac2/GCA_023658055.1_Tpac_2.0_genomic.fna
+
+Use stats to create meta...
+
+Have about 95% alignment success (over 91% or so with LFS)
+
+```{r}
+eul<-read_csv("outputs/209/eul.csv", col_names = c("SampleID","Aligned")) %>% mutate(Path=paste0("data/eul-tpac2/",SampleID,".sort.bam")) %>% mutate(Pop="Unknown")
+eul %>% select(Path) %>% write_tsv("bamlists/eul73-tpac2.bamlist",col_names = FALSE)
+eul %>% select(SampleID) %>% write_tsv("bamlists/eul73-tpac2.names",col_names = FALSE)
+```
+
+Note to self to include a region file here for larger chroms.
+
+```{sh, eval=FALSE}
+srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 66 -bam bamlists/eul73-tpac2.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-rf meta/long-seqs-polished.tsv -out outputs/209/snps-wgs  \
+-minMaf 0.05 -minMapQ 10 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/209/snps.out 2> outputs/209/snps.err &
+```

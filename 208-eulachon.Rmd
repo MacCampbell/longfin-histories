@@ -8,6 +8,17 @@ date: "2025-07-10"
 knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 ```
 
+
+```{r}
+library(tidyverse)
+library(snpR)
+library(adegenet)
+library(vcfR)
+library(ggrepel)
+```
+
+
+
 https://www.ncbi.nlm.nih.gov/sra?linkname=bioproject_sra_all&from_uid=274282
 
 Some sequencing is single ended some is paired end
@@ -188,13 +199,16 @@ Note to self to include a region file here for larger chroms.
 
 ```{sh, eval=FALSE}
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 66 -bam bamlists/eul73.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
-=rf meta/long-seqs-polished.tsv -out outputs/208/snps-wgs  \
+-minInd 62 -bam bamlists/eul73.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-rf meta/long-seqs-polished.tsv -out outputs/208/snps-wgs  \
 -minMaf 0.05 -minMapQ 10 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/208/snps.out 2> outputs/208/snps.err &
 ```
 
-	-> Number of sites retained after filtering: 14856 with minMapQ 10
+	-> Number of sites retained after filtering: 14856 with minMapQ 20
+	-> Number of sites retained after filtering: 14737 with rf and minMapQ 10
+	-> Number of sites retained after filtering: 23134  with rf minMapQ 10 and minInd 62 instead of 66
+
 
 ```{sh, eval=FALSE}
 #create vcf
@@ -203,22 +217,55 @@ plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-c
 
 module load bcftools
 bcftools reheader -s ../../bamlists/eul73.names -o plink-renamed.vcf plink.vcf
-bcftools +fill-tags plink-renamed.vcf | bcftools view -i 'F_MISSING < 0.10' | bcftools view -i 'INFO/MAF > 0.01' > filtered.vcf
+#changing missing threshold from .10 to .20
+bcftools +fill-tags plink-renamed.vcf | bcftools view -i 'F_MISSING < 0.20' | bcftools view -i 'INFO/MAF > 0.01' > filtered.vcf
 bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered.vcf > plink-pruned.vcf
 ```
 
 Basic PCA
 
+3674 snps in pruned
 ```{r}
 snps<-import.snpR.data(genotypes = "outputs/208/plink-pruned.vcf", 
       sample.meta = eul)
 ```
+
 
 ```{r}
 p <- plot_clusters(snps, facets = c("Pop"), viridis.option = "H")
 p$plot$pca
 ```
 
+Another way:
+
+```{r}
+meta<-eul
+vcf<-read.vcfR(file="outputs/208/plink-pruned.vcf")
+genind<-vcfR2genind(vcf)
+genind@pop<-as.factor(meta$Pop)
+
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(meta)
+eig<-pca1$eig/sum(pca1$eig)*100
+
+
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=Pop),pch=21, alpha=0.75, cex=2) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="H") +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") +
+  geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
+pc12
+```
 
 
 
@@ -238,7 +285,7 @@ files<-list.files("outputs/208/vcfs",pattern = "*.ldf.ld", full.names = TRUE)
 plotLd<-function(file) {
   chrom<-gsub("outputs/208/vcfs/","",file)
   chrom<-gsub(".ldf.ld","", chrom)
-  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.1)
+  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.01)
 
   ggplot(lc) +
   geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
@@ -315,8 +362,8 @@ pc12<-ggplot(df) +
   theme(panel.grid = element_blank()) +
   scale_fill_viridis_d(option="H") +
   guides(fill = guide_legend(override.aes = list(pch = 22))) +
-  theme(legend.position = "top") +
-  geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
+  theme(legend.position = "top") 
+ # geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
 pc12
 
 ggsave(paste0("outputs/208/chrom-pcs/",chrom,".pdf"))
@@ -328,7 +375,7 @@ lapply(files, plotPCA)
 
 ## Check loadings
 ```{r}
-vcf<-read.vcfR(file="outputs/208/lcl26-sub.vcf")
+vcf<-read.vcfR(file="outputs/208/vcfs/lcl|scaffold_29.vcf")
 genind<-vcfR2genind(vcf)
 genind@pop<-as.factor(yak$Pop)
 ```
@@ -341,7 +388,7 @@ X <- tab(gen, NA.method="mean")
 pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
 
 df<-pca1$li
-df<-df %>% bind_cols(yak)
+df<-df %>% bind_cols(eul)
 
 eig<-pca1$eig/sum(pca1$eig)*100
 ```
@@ -368,9 +415,24 @@ loadings
 loadings$Position<-gsub("lcl\\|.*_|\\.\\d$","",loadings$Allele)
 loadings$Position<-as.numeric(loadings$Position)
 loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
-tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .01) %>% select(-CS2, -CS3) %>% 
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .1) %>% select(-CS2, -CS3) %>% 
   mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
 
 tops %>% relocate(Chrom, Position, CS1)
 
 ```
+
+lcl|scaffold_29	3717712	lcl|scaffold_29_3717712	T	G	.	.	PR;F_MISSING=0.0547945;NS=69;AN=138;AF=0.449275;MAF=0.449275;AC=62;AC_Het=56;AC_Hom=6;AC_Hemi=0;HWE=1.02816e-07;ExcHet=7.08524e-08	GT	0/1	0/1	0/1	1/1	0/1	./.	0/1	0/1	0/1	1/1 0/1	0/1	./.	./.	0/1	0/1	0/1	0/0	0/1	0/0	0/1	0/1	0/0	0/0	0/1	0/0	0/1	0/1	0/10/1	0/1	0/1	0/1	./.	0/1	0/1	0/0	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/10/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/0	0/1	1/1	0/10/0	0/0	0/1	0/0	0/1	0/1
+(base) ➜  vcfs git:(main) ✗ grep 3717684 lcl\|scaffold_29.vcf 
+lcl|scaffold_29	3717684	lcl|scaffold_29_3717684	G	A	.	.	PR;F_MISSING=0.0684932;NS=68;AN=136;AF=0.455882;MAF=0.455882;AC=62;AC_Het=56;AC_Hom=6;AC_Hemi=0;HWE=3.58591e-08;ExcHet=3.39348e-08	GT	0/1	0/1	0/1	1/1	0/1	./.	0/1	0/1	0/1	1/1 0/1	0/1	./.	./.	0/1	0/1	0/1	0/0	0/1	0/0	0/1	0/1	0/0	0/0	0/1	0/0	0/1	0/1	0/10/1	0/1	0/1	0/1	./.	0/1	0/1	0/0	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/10/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/0	0/1	1/1	0/1./.	0/0	0/1	0/0	0/1	0/1
+(base) ➜  vcfs git:(main) ✗ grep 3717695 lcl\|scaffold_29.vcf 
+lcl|scaffold_29	3717695	lcl|scaffold_29_3717695	T	A	.	.	PR;F_MISSING=0.0684932;NS=68;AN=136;AF=0.455882;MAF=0.455882;AC=62;AC_Het=56;AC_Hom=6;AC_Hemi=0;HWE=3.58591e-08;ExcHet=3.39348e-08	GT	0/1	0/1	0/1	1/1	0/1	./.	0/1	0/1	0/1	1/1 0/1	0/1	./.	./.	0/1	0/1	0/1	0/0	0/1	0/0	0/1	0/1	0/0	0/0	0/1	0/0	0/1	0/1	0/10/1	0/1	0/1	0/1	./.	0/1	0/1	0/0	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/10/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/0	0/1	1/1	0/1./.	0/0	0/1	0/0	0/1	0/1
+
+## There is an improved Eulachon assemlby Tpac_2.0 
+putting in genomes/tpac2/GCA_023658055.1_Tpac_2.0_genomic.fna.gz
+(base) maccamp@farm:~/genomes/tpac2$ grep CM GCA_023658055.1_Tpac_2.0_genomic.fna.fai  | cut -f 1 | grep -v "CM042914.1" > chroms.txt
+Indexing...
+
+working on this in 209
+
+

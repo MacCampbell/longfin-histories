@@ -8,6 +8,16 @@ date: "2025-07-09"
 knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 ```
 
+
+```{r}
+library(tidyverse)
+library(snpR)
+library(adegenet)
+library(vcfR)
+library(ggrepel)
+```
+
+
 Need to convert .sorted.bam to fastqs
 
 
