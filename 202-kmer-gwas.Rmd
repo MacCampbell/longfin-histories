@@ -60,11 +60,11 @@ Starting with 37 individuals
 
 ```{r}
 m37<-read_csv("meta/m37.csv")
-m37 %>% select(SampleID) %>% mutate(Commands=paste0("/home/maccamp/kmers/external_programs/kmc_v3 -t2 -k31 -ci2 @", SampleID,".txt ",SampleID,"_kmc.canon ./ 1> kmc.canon.1 2>kmc_canon.2; ", 
+m37 %>% select(SampleID) %>% mutate(Commands=paste0("/home/maccamp/kmers/external_programs/kmc_v3 -t2 -k31 -ci2 @", SampleID,".txt ",SampleID,"_kmc_canon ./ 1> kmc.canon.1 2>kmc_canon.2; ", 
                                                     "/home/maccamp/kmers/external_programs/kmc_v3 -t2 -k31 -ci0 -b @", SampleID,".txt ",SampleID,"_kmc_all ./ 1> kmc_all.1 2>kmc_all.2; ",
                                                     "/home/maccamp/kmers/bin/kmers_add_strand_information -c ",SampleID,"_kmc_canon -n ",SampleID,"_kmc_all -k 31 -o ", SampleID,"-kmers_with_strand;",
                                                     " rm *.kmc* ;")) %>%
-  select(Commands) %>% write_tsv("202.1-commands.txt")
+  select(Commands) %>% write_tsv("202.1-commands.txt", col_names = FALSE)
 ```
 
 need to write a bunch of files with text
@@ -77,4 +77,11 @@ LFS540.txt
 cut -f 1 -d',' ../../meta/m37.csv  | while read sample; do echo $sample; echo /home/maccamp/longfin-histories/data/alt-demultiplexed/${sample}_R1.fastq.gz >> $sample.txt; echo /home/maccamp/longfin-histories/data/alt-demultiplexed/${sample}_R2.fastq.gz >> $sample.txt; done;
 ```
 
-Now to run commands, 
+Now to run commands, in outputs/202/
+
+Seems to run out of memory with 32GB, moving to bigmemh
+
+```{sh, eval=FALSE}
+ln -s ../../202.1-commands.txt .
+srun -p bigmemh -t 14:00:00 --mem=128GB --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 bash 202.1-commands.txt
+```
