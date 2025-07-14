@@ -47,11 +47,15 @@ Retrieving from barbera, and that is still extant!
 ~/data/delta-smelt-omics$ scp -r maccampbell@barbera.genomecenter.ucdavis.edu:/share/schreierlab/smelt-wgs/demulti* ./ 
 ```
 
+Need some meta, several of these fish are sexed based on prefixes. Previously I used an 80 bamlist. 
+Symlink to data/dsm subdir those with sex info
+e.g. 111392
 
-Symlink to dsm subdir
+104 samples
+
 
 bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
 
-```
+
  
  
