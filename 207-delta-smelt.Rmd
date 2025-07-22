@@ -57,5 +57,41 @@ e.g. 111392
 bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
 
 
+ have some aligned, lets take a look:
+ 
+```{r}
+dm<-read_csv("meta/test-dsm.csv", col_names = c("Sample","Aligned","Dedup","Coverage"))
+dm$Sex<-gsub("^\\d\\d\\d\\d\\d","",dm$Sample)
+dm$Sex<-as.numeric(dm$Sex)
+dm<-dm %>% mutate(Path=paste0("data/dsm/",Sample,".sort.flt.bam"))
+```
  
  
+```{r}
+ggplot(dm) +
+  geom_histogram(aes(x=Coverage))
+```
+
+
+```{r}
+dm8<-dm %>% filter(Coverage>8) %>% mutate(Pheno=Sex-1)
+dm8 %>% group_by(Sex) %>% summarize(Count=n())
+```
+
+#Run GWAS across chroms
+
+```{r}
+dm8 %>% select(Path) %>% write_tsv("bamlists/dm8.bamlist", col_names = FALSE)
+dm8 %>% select(Pheno) %>% write_tsv("bamlists/dm8.pheno", col_names = FALSE)
+```
+
+dsm-omics/1300-do-asso.sh is really basic
+```{sh, eval=FALSE}
+bash $HOME/dsm-omics/301-do-asso.sh $HOME/longfin-histories/bamlists/dm8.bamlist  $HOME/genomes/longfin-polished/1mbseqs.txt $HOME/longfin-histories/bamlists/dm8.pheno
+```
+
+Get long seqs
+maccamp@farm:~/genomes/longfin-polished$ cat lfs_run3_scaffolds_final.fa.fai | awk '$2 > 1000000 {print;}' | cut -f 1 > 1mbseqs.txt
+
+
+```
