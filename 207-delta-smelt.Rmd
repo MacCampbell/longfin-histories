@@ -87,7 +87,7 @@ dm8 %>% select(Pheno) %>% write_tsv("bamlists/dm8.pheno", col_names = FALSE)
 
 dsm-omics/1300-do-asso.sh is really basic
 ```{sh, eval=FALSE}
-bash $HOME/dsm-omics/301-do-asso.sh $HOME/longfin-histories/bamlists/dm8.bamlist  $HOME/genomes/longfin-polished/1mbseqs.txt $HOME/longfin-histories/bamlists/dm8.pheno
+bash $HOME/longfin-histories/207.1-do-asso.sh $HOME/longfin-histories/bamlists/dm8.bamlist  $HOME/genomes/longfin-polished/1mbseqs.txt $HOME/longfin-histories/bamlists/dm8.pheno
 ```
 
 Get long seqs
