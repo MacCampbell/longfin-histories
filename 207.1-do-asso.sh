@@ -18,8 +18,8 @@ while read chrom; do
   echo "#!/bin/bash -l
   $HOME/angsd/angsd -doAsso 1 -yBin $phenos -GL 1 -nThreads 12 -minInd $thresh  \
    -minMapQ 20 -minQ 20 -minMaf 0.05 \
-  -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -r $chrom -out $chrom-asso \
-  -bam $bamlist  > $chrom-asso.out 2> $chrom-asso.err " > $chrom-asso.sh
+  -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -r '$chrom' -out '$chrom'-asso \
+  -bam $bamlist  > '$chrom'-asso.out 2> '$chrom'-asso.err " > '$chrom'-asso.sh
   
 sbatch -p bigmemm -t 12:00:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $chrom-asso.sh
 
