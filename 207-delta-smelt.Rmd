@@ -85,6 +85,7 @@ dm8 %>% group_by(Sex) %>% summarize(Count=n())
 dm8 %>% select(Path) %>% write_tsv("bamlists/dm8.bamlist", col_names = FALSE)
 dm8 %>% select(Pheno) %>% write_tsv("bamlists/dm8.pheno", col_names = FALSE)
 dm8 %>% select(Sample) %>% write_tsv("bamlists/dm8.names", col_names = FALSE)
+dm8 %>% arrange(Sex) %>% select(Sample) %>% write_tsv("bamlists/dm8-sort.names", col_names = FALSE)
 
 ```
 
@@ -176,11 +177,11 @@ ggsave("outputs/207/dsm-lfs-manhattan.jpeg", width=12, height=6)
 
 Region:
 ```{r}
-mins<-df %>% filter(Chromosome=="lcl|scaffold_13") %>% arrange(-LRT) %>% head(n=20) 
+mins<-df %>% filter(Chromosome=="lcl|scaffold_13") %>% arrange(-LRT) %>% head(n=60) 
 max(mins$Position)
 min(mins$Position)
-mins 
-mins %>% select(Chromosome, Position) %>% write_tsv(file="meta/topgwas-sites.txt", col_names = FALSE)
+mins %>% arrange(LRT)
+mins %>% select(Chromosome, Position) %>% arrange(Position) %>% write_tsv(file="meta/topgwas-sites.txt", col_names = FALSE)
 ```
 
 We would expect the Minor Frequency to about .25 if 50:50, we have 31:23 so:
@@ -194,16 +195,114 @@ Let's call the top20
 ```{sh, eval=FALSE}
 srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
 -minInd 49 -bam bamlists/dm8.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
--out outputs/207/top-scaffold13-snps -sites outputs/207/topgwas-sites.txt \
+-r 'lcl|scaffold_13' -out outputs/207/top-scaffold13-snps -sites outputs/207/topgwas-sites.txt \
 -minMaf 0.05 -minMapQ 10 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/207/snps.out 2> outputs/207/snps.err &
 ```
 
-```{sh}
+```{sh,eval=FALSE}
 angsd sites index outputs/207/topgwas-sites.txt
 ```
 
+```{sh, eval=FALSE}
+srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 49 -bam bamlists/dm8.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-r 'lcl|scaffold_13:966304-1681282' -out outputs/207/top-scaffold13-snps-region \
+-minMaf 0.05 -minMapQ 10 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/207/snps-region.out 2> outputs/207/snps-region.err &
+```
 
+Make vcf
+
+```{sh, eval=FALSE}
+#create vcf
+plink --tped top-scaffold13-snps-region.tped --tfam top-scaffold13-snps-region.tfam  --out plink-binary --recode --allow-extra-chr --noweb
+plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-chr -out plink
+
+module load bcftools
+bcftools reheader -s ../../bamlists/dm8.names -o plink-renamed.vcf plink.vcf
+
+#filter a bit
+bcftools +fill-tags plink-renamed.vcf | bcftools view -i 'F_MISSING < 0.05' | bcftools view -i 'INFO/MAF > 0.15' | bcftools view -i 'INFO/MAF < 0.4'> filtered.vcf
+bcftools view -S ../../bamlists/dm8-sort.names filtered.vcf > sorted-by-names.vcf        
+cut -f 2 ../../meta/topgwas-sites.txt| while read line; do grep $line sorted-by-names.vcf; done;
+```
+
+Make PCA
+```{r}
+#vcf<-read.vcfR(file="outputs/207/topsites.vcf")
+vcf<-read.vcfR(file="outputs/207/filtered.vcf")
+
+genind<-vcfR2genind(vcf)
+genind@pop<-as.factor(dm8$Sex)
+```
+
+
+```{r}
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(dm8)
+df$Sex<-as.factor(df$Sex)
+eig<-pca1$eig/sum(pca1$eig)*100
+```
+
+```{r}
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=Sex), alpha=0.75, cex=2, pch=21) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="H") +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") +
+  geom_text_repel(aes(x=Axis1, y=Axis2,label=Sample), max.overlaps = Inf)
+pc12
+
+ggsave("outputs/207/dsm-PCA.jpeg")
+```
+
+```{r}
+loadings<-pca1$c1 %>% as_tibble()
+loadings$Allele<-rownames(pca1$c1) 
+
+loadings$Position<-gsub("lcl\\|.*_|\\.\\d$","",loadings$Allele)
+loadings$Position<-as.numeric(loadings$Position)
+loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .01) %>% select(-CS2, -CS3) %>% 
+  mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
+
+tops %>% relocate(Chrom, Position, CS1)
+
+```
+(base) ➜  207 git:(main) ✗ bcftools view -S ../../bamlists/dm8-sort.names filtered.vcf > sorted-by-names.vcf
+
+```{r}
+
+ddf<-read_tsv("outputs/207/top-scaffold13-snps-region.geno.gz", col_names = c("FALSE")) %>% select(-X57)
+#replace with most commmon entry?
+#replace with NA for now
+ddf[ddf==-1]<-NA
+ddf2<-ddf %>% filter(X2 %in% mins$Position)
+m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
+
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Sex<-dm8$Sex
+annot$Sex<-gsub("1","Female",annot$Sex)
+annot$Sex<-gsub("2","Male",annot$Sex)
+```
+```{r}
+
+pdf("outputs/207/dsm-sex-heatmap.pdf")
+pheatmap(m, labels_col = dm8$Sample, cluster_rows=TRUE, annotation_col = annot, width=12, height=8, cluster_cols = TRUE, legend=TRUE,
+         fontsize_col = 6)
+dev.off()
+```
 ## Model2
 
 ```{r}
