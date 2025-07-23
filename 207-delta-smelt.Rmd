@@ -84,6 +84,8 @@ dm8 %>% group_by(Sex) %>% summarize(Count=n())
 ```{r}
 dm8 %>% select(Path) %>% write_tsv("bamlists/dm8.bamlist", col_names = FALSE)
 dm8 %>% select(Pheno) %>% write_tsv("bamlists/dm8.pheno", col_names = FALSE)
+dm8 %>% select(Sample) %>% write_tsv("bamlists/dm8.names", col_names = FALSE)
+
 ```
 
 dsm-omics/1300-do-asso.sh is really basic
@@ -191,7 +193,7 @@ Let's call the top20
 
 ```{sh, eval=FALSE}
 srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 18 -bam bamlists/yak.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-minInd 49 -bam bamlists/dm8.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
 -out outputs/207/top-scaffold13-snps -sites outputs/207/topgwas-sites.txt \
 -minMaf 0.05 -minMapQ 10 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/207/snps.out 2> outputs/207/snps.err &
