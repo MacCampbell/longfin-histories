@@ -4,7 +4,7 @@
 # Feeding a list of chroms meta/test.chroms
 # bash $HOME/shernook/202-do-asso.sh $HOME/shernook/bamlists/bamlist56.bamlist $HOME/shernook/meta/test.chroms $HOME/shernook/bamlists/bamlist56-early-late.pheno
 # in this case
-  # bash $HOME/longfin-histories/207.2-do-asso.sh $HOME/longfin-histories/bamlists/dm8.bamlist  test-seqs.txt $HOME/longfin-histories/bamlists/dm8.pheno
+  # bash $HOME/longfin-histories/207.2-do-asso-model2.sh $HOME/longfin-histories/bamlists/dm8.bamlist  test-seqs.txt $HOME/longfin-histories/bamlists/dm8.pheno
 #
 bamlist=$1
 list=$2
