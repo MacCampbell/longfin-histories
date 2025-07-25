@@ -13,6 +13,7 @@ library(tidyverse)
 library(snpR)
 library(adegenet)
 library(vcfR)
+library(ggplotify)
 library(ggrepel)
 ```
 
@@ -234,7 +235,9 @@ pc12<-ggplot(df) +
   geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
 pc12
 ```
-
+```{r}
+annotcols<-df %>% select(Axis1) %>% mutate(Sex = ifelse(Axis1 < -2.5, "Female","Male")) %>% select(-Axis1)
+```
 ```{r}
 loadings<-pca1$c1 %>% as_tibble()
 loadings$Allele<-rownames(pca1$c1) 
@@ -243,7 +246,7 @@ loadings
 loadings$Position<-gsub("lcl\\|.*_|\\.\\d$","",loadings$Allele)
 loadings$Position<-as.numeric(loadings$Position)
 loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
-tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .01) %>% select(-CS2, -CS3) %>% 
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .45) %>% select(-CS2, -CS3) %>% 
   mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
 
 tops %>% relocate(Chrom, Position, CS1)
@@ -251,3 +254,26 @@ tops %>% relocate(Chrom, Position, CS1)
 ```
 
 lcl|scaffold_26	8445555	lcl|scaffold_26_8445555	T	C	.	.	PR;F_MISSING=0;NS=20;AN=40;AF=0.325;MAF=0.325;AC=13;AC_Het=13;AC_Hom=0;AC_Hemi=0;HWE=0.0575543;ExcHet=0.0527742	GT	0/1	0/0	0/1	0/1	0/1	0/0	0/0	0/1	0/1	0/0	0/1	0/1	0/1	0/1	0/0	0/1	0/1	0/0	0/0	0/1
+
+## Let's make a heatmap  here
+
+```{r}
+library(pheatmap)
+ddf<-read_tsv("outputs/206/snps-wgs.geno.gz", col_names = c("FALSE")) %>% select(-X23)
+ddf[ddf==-1]<-NA
+ddf<-ddf %>% filter(`FALSE`=="lcl|scaffold_26")
+ddf2<-ddf %>% filter(X2 %in% tops$Position)
+m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Sex<-annotcols$Sex
+annot
+```
+
+```{r}
+as.ggplot(pheatmap(m, annotation_col = annot, cluster_rows = TRUE,
+                   labels_col = yak$SampleID, labels_row = ddf2$X2, fontsize_row = 6)) +
+  ggtitle("Heatmap of Longfin Smelt Variants on scaffold_26\n") + 
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/206/lfs-sex-heatmap.pdf", width=8, height=12)
+```

@@ -1,0 +1,96 @@
+---
+title: "210-dsm-genome"
+output: html_document
+date: "2025-07-25"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message=FALSE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+Let's pull out the existing gwas stuff from https://github.com/MacCampbell/dsm-omics/blob/main/300-gwas.Rmd
+
+```{r}
+fish<-read_tsv("outputs/210/m80-ordered.bamlist", col_names = c("Path"))
+fish$Sample<-gsub("/home/maccamp/dsm-omics/data/SOMM51\\d/","",fish$Path)
+fish$Sample<-gsub("_R1.sort.flt.bam","",fish$Sample)
+fish$Sex<-gsub("^\\d\\d\\d\\d\\d","",fish$Sample)
+fish$Sex<-as.numeric(fish$Sex)
+fish<-fish %>% relocate(Sample, Sex, Path)
+fish %>% select(Sample) %>% write_tsv("bamlists/test80.names", col_names = FALSE)
+fish %>% select(Path) %>% write_tsv("bamlists/test80.bamlist", col_names = FALSE)
+fish
+```
+
+```{r}
+files = list.files(path="outputs/210/", pattern="*.lrt0.gz", full.names = TRUE)
+list = lapply(files, read_tsv)
+data<-bind_rows(list)
+```
+```{r}
+df <- data %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
+  filter(log10p>=0 & log10p != "Inf") %>%
+  mutate(p = dchisq(LRT, df=1)) %>%
+  mutate(bonfer = p.adjust(p, method = "bonferroni")) %>% 
+  mutate(BHfdr = p.adjust(p, method = "BH")) %>%
+  group_by(Chromosome) %>%
+  mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
+  mutate(BHfdrchrom = p.adjust(p, method = "BH")) %>% ungroup() %>%
+  mutate(Index=1:n())
+
+df %>% arrange(-LRT) %>% head(n=20)
+```
+
+```{r}
+nb.cols <- length(unique(df$Chromosome))
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+#randomize
+mycolors<-sample(mycolors)
+```
+
+```{r}
+ggplot(df %>% filter(log10p>1)) +
+  geom_point(aes(x=Position, y=log10p, color=Chromosome), alpha=0.75, cex=0.5) +
+ # geom_hline(yintercept = -log10(0.05/nrow(dddf)), col="black", linetype=2, alpha=0.5) +
+#  geom_hline(yintercept= 8, col="black", linetype=1, alpha=0.5) +
+  theme_bw() +
+#  scale_x_continuous(breaks=chroms$Position, labels=chroms$Chromosome) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=8)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  ylab("-log10(p)\n") +
+  xlab("\nChromosome") +
+  ggtitle("DSM Sex GWAS with LFS Genome") +
+  theme(plot.title = element_text(hjust=0.5) ) +
+  theme(plot.subtitle = element_text(hjust=0.5)) +
+  facet_wrap(.~Chromosome, ncol=5, scales="free_x") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+
+ggsave("outputs/210/dsm-dsm-gwas.jpeg", width=18, height=12)
+```
+
+
+Call snps across the peak(s)
+
+```{r}
+sub<-df %>% arrange(-LRT) %>% head(n=80)
+ggplot(sub) +
+  geom_point(aes(x=Position, y=log10p))
+sub %>% select(Chromosome, Position) %>% write_tsv("meta/210-sites.tsv", col_names = FALSE)
+```
+
+Calling these snps
+
+```{sh, eval=FALSE}
+srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 72 -bam bamlists/test80.bamlist -ref $HOME/genomes/GCF021917145.1/GCF_021917145.1_fHypTra1_genomic.fna.fai   \
+-r NC_061078.1 -sites outputs/210/topgwas-sites.txt -rf outputs/210/210-sites.tsv  \
+-minMaf 0.05 -minMapQ 10 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/210/snps.out 2> outputs/210/snps.err &
+```
