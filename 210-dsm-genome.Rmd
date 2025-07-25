@@ -79,18 +79,66 @@ ggsave("outputs/210/dsm-dsm-gwas.jpeg", width=18, height=12)
 Call snps across the peak(s)
 
 ```{r}
-sub<-df %>% arrange(-LRT) %>% head(n=80)
+sub<-df %>% arrange(-LRT) %>% filter(Chromosome=="NC_061078.1") %>% head(n=80) %>% arrange(Position)
 ggplot(sub) +
   geom_point(aes(x=Position, y=log10p))
 sub %>% select(Chromosome, Position) %>% write_tsv("meta/210-sites.tsv", col_names = FALSE)
 ```
 
-Calling these snps
+Calling these snps angsd sites index sites.tsv symlinked file
+
+15197806 doesn't get called etc.
 
 ```{sh, eval=FALSE}
-srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 72 -bam bamlists/test80.bamlist -ref $HOME/genomes/GCF021917145.1/GCF_021917145.1_fHypTra1_genomic.fna.fai   \
--r NC_061078.1 -sites outputs/210/topgwas-sites.txt -rf outputs/210/210-sites.tsv  \
+srun -t 2:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 72 -bam bamlists/test80.bamlist -ref $HOME/genomes/GCF021917145.1/GCF_021917145.1_fHypTra1_genomic.fna   \
+-r NC_061078.1:11600000- -sites outputs/210/sites.tsv -out outputs/210/snps \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/210/snps.out 2> outputs/210/snps.err &
+```
+
+relaxed version
+
+```{sh, eval=FALSE}
+srun -t 2:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 64 -bam bamlists/test80.bamlist -ref $HOME/genomes/GCF021917145.1/GCF_021917145.1_fHypTra1_genomic.fna   \
+-r NC_061078.1:11600000- -sites outputs/210/sites.tsv -out outputs/210/snps-relaxed \
 -minMaf 0.05 -minMapQ 10 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
--doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/210/snps.out 2> outputs/210/snps.err &
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/210/snps-relaxed.out 2> outputs/210/snps-relaxed.err &
+```
+
+
+```{sh, eval=FALSE}
+srun -t 2:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 72 -bam bamlists/test80.bamlist -ref $HOME/genomes/GCF021917145.1/GCF_021917145.1_fHypTra1_genomic.fna   \
+-r NC_061078.1:11600000-  -out outputs/210/snps-range \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/210/snps-range.out 2> outputs/210/snps-range.err &
+```
+
+
+
+```{r}
+meta<-fish
+ddf<-read_tsv("outputs/210/snps-range.geno.gz", col_names = c("FALSE")) %>% select(-X83)
+#replace with most commmon entry?
+#replace with NA for now
+ddf[ddf==-1]<-NA
+ddf2<-ddf %>% filter(X2 %in% head(sub$Position,30))
+m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
+
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Sex<-meta$Sex
+annot$Sex<-gsub("1","Female",annot$Sex)
+annot$Sex<-gsub("2","Male",annot$Sex)
+```
+
+```{r}
+
+as.ggplot(pheatmap(m, labels_col = meta$Sample, cluster_rows=TRUE, annotation_col = annot, width=12, height=8, cluster_cols = TRUE, legend=TRUE,
+                   labels_row = head(sub$Position,30),
+         fontsize_col = 6)) + ggtitle("Delta Smelt Variants on Delta Smelt NC_061078.1") +
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/210/dsm-sex-dsm-reference-heatmap-subset.pdf", width=12, height=6)
 ```
