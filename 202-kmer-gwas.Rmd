@@ -85,3 +85,36 @@ Seems to run out of memory with 32GB, moving to bigmemh
 ln -s ../../202.1-commands.txt .
 srun -p bigmemh -t 14:00:00 --mem=128GB --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 bash 202.1-commands.txt
 ```
+
+
+Looks to have worked...
+
+need a file with path to samples in it
+
+(kmers) maccamp@farm:~/longfin-histories/outputs/202$ ls | grep with_strand > strands
+(kmers) maccamp@farm:~/longfin-histories/outputs/202$ ls | grep LFS | grep txt | perl -pe 's/.txt//g' > sampleids 
+(kmers) maccamp@farm:~/longfin-histories/outputs/202$ paste strands sampleids > kmers_list_paths.txt 
+
+~/kmers/bin/list_kmers_found_in_multiple_samples  -l kmers_list_paths.txt -k 31 --mac 5 -p 0.2 -o kmers_to_use
+
+this runs for a while...
+
+~/kmers/bin/build_kmers_table -l kmers_list_paths.txt -k 31 -a kmers_to_use -o kmers_table
+
+Runs to completion!
+
+Run k-mers-based GWAS with permutation based-threshold
+
+Format of phenotype file: the phenotype file should be with two columns separated by tabs (\t),
+with “accession_id” and “phenotype_value” in the header. The first column lists the name of the
+individuals, as in the kmers_table, and the second, phenotype_value, the phenotypic values in
+numerical form.
+
+```{r}
+m37<-read_csv("meta/m37.csv")
+m37 %>% select(SampleID, ybin) %>% rename("accession_id"="SampleID", "phenotype_value"="ybin") %>% write_tsv("meta/37.plink.pheno")
+```
+
+python2.7
+<KMERS-GWAS-PATH>/kmers_gwas.py --pheno phenotype.pheno
+--kmers_table kmers_table -l 31 -p 8 --outdir output_dir

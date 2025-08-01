@@ -1,0 +1,90 @@
+---
+title: "211-dsm-male-genome"
+output: html_document
+date: "2025-08-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+
+```{r}
+library(tidyverse)
+```
+
+
+Male specific sequence?
+
+How can I interrogate:
+
+(1) Coverage drops
+(2) unaligned sequence data?
+
+Get some males:
+120092
+500132
+402142
+
+Some females
+302001
+500131
+802601
+
+
+dsm-omics/data/male-align
+120092
+73555280 + 0 mapped (92.15% : N/A)
+500132
+68983279 + 0 mapped (91.85% : N/A)
+
+302001
+68203616 + 0 mapped (91.97% : N/A)
+500131
+83178075 + 0 mapped (91.96% : N/A)
+
+
+
+~/dsm-omics/data/SOMM517$ 
+female genome
+
+120092
+74082967 + 0 mapped (92.85% : N/A)
+
+302001
+68676091 + 0 mapped (92.66% : N/A)
+
+
+samtools view -f 4 -b aligned.bam > unmapped.bam
+samtools fastq unmapped.bam > unmapped.fastq
+
+
+## Difcover
+https://github.com/timnat/DifCover
+
+making male and female subdirectories of outputs/211
+
+male
+ln -s ~/dsm-omics/data/male-align/120092.sort.ba* .
+ln -s ~/dsm-omics/data/male-align/302001.sort.ba* .
+
+female
+(base) maccamp@farm:~/longfin-histories/outputs/211/female$ ln -s ~/dsm-omics/data/SOMM517/120092_R1.sort.bam ./120092.sort.bam
+(base) maccamp@farm:~/longfin-histories/outputs/211/female$ ln -s ~/dsm-omics/data/SOMM517/302001_R1.sort.bam ./302001.sort.bam
+
+Creating difcover environment
+
+BEDTOOLS
+SAMTOOLS
+AWK
+DNAcopy
+conda install conda-forge::r-base
+conda install bedtools
+conda install samtools
+
+(difcover) maccamp@farm:~/longfin-histories/outputs/211/female$ cp ~/DifCover/dif_cover_scripts/run_difcover.sh ./
+edit run_difcover to include files
+
+srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=4 run_difcover.sh
+
+Running on both
