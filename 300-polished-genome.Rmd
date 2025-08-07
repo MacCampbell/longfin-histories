@@ -8,9 +8,14 @@ date: "2025-08-07"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-/home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
+```{r}
+library(tidyverse)
+library(ggpubr)
+```
 
-I have data from saglam et al.
+Reference genome: /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
+
+I have data from Saglam et al.
 
 ```{r}
 sag<-read_csv("meta/saglam.csv", col_names=c("ID","Reads","Dedup","Cov")) %>% mutate(Path=paste0("data/polish-saglam/",ID,".sort.flt.bam"))
@@ -33,13 +38,214 @@ ggplot(sag %>% filter(Dedup > 2e5)) +
 ```{r}
 s144<-sag %>% filter(Dedup > 2e5)
 s144 %>% select(Path) %>% write_tsv("bamlists/s144.bamlist", col_names = FALSE)
+s144 %>% select(ID) %>% write_tsv("bamlists/s144.names", col_names = FALSE)
+
+s144$Pop<-factor(s144$Pop, levels=c("ALVS","CHPI","SFBY","PETA","SUIB","HUMB","COLR","LWSH","PTLC","HRLC","SKNA","YBAK"))
 ```
 
-```{r}
+```{sh, eval=FALSE}
 srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12  $HOME/angsd/angsd -P 12  \
--bam bamlists/s144.bamlist -ref /home/maccamp/genomes/longfin-chrom/lfs_final_scaff_assembly.fasta \
+-bam bamlists/s144.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
 -minInd 130 -minMapQ 20 -minQ 20 -GL 2 -doGLF 2 \
 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doIBS 1 -doCounts 1 -doCov 1 -makeMatrix 1 -minMaf 0.05 \
 -out outputs/300/s144-ibs-90 >outputs/300/s144-ibs-90.out 2> outputs/300/s144-ibs-90.err &
+```
+
+	-> Number of sites retained after filtering: 60378 
+
+
+```{r}
+m <- as.matrix(read.table("outputs/300/s144-ibs-90.covMat"))
+eig <- eigen(m)
+var<-eig$values/sum(eig$values)
+cumvar<-cumsum(eig$values)/sum(eig$values)
+
+head(var)
+head(cumvar)
+```
+
+
+```{r}
+covs<-eig$vectors[,1:3] %>% as_tibble() %>% bind_cols(s144)
+
+pc12<-ggplot(covs) +
+  geom_point(aes(x=V1, y=V2, fill=Pop), pch=21, cex=3, alpha=0.75) +
+  xlab(paste("PC1", " ", round((100*var[1]),2), "%", sep = "")) +
+  ylab(paste("PC2", " ", round((100*var[2]),2), "%", sep = "")) +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  #scale_fill_viridis_c() +
+  scale_fill_viridis_d(option="magma") +
+  theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  ggtitle("B") +
+  theme(plot.title = element_text(hjust=0, size=16)) 
+
+pc12
+
+```
+```{r}
+pc13<-ggplot(covs) +
+  geom_point(aes(x=V1, y=V3, fill=Pop), pch=21, cex=3, alpha=0.75) +
+  xlab(paste("PC1", " ", round((100*var[1]),2), "%", sep = "")) +
+  ylab(paste("PC3", " ", round((100*var[3]),2), "%", sep = "")) +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  #scale_fill_viridis_c() +
+  scale_fill_viridis_d(option="magma") +
+  theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  ggtitle("C") +
+  theme(plot.title = element_text(hjust=0, size=16)) 
+
+pc13
+
+```
+
+Scree plot
+ 1 -0.0326 -0.0561 -0.710  SFBY  SFBY_075 2764947  705849 0.0981 data/polish-saglam/SFBY_075.sort.flt.bam
+ 2 -0.0387 -0.0642 -0.656  SFBY  SFBY_083 2616986  683952 0.100  data/polish-saglam/SFBY_083.sort.flt.bam
+ 
+ These are two SFBY ones, as well as the two weird YBAK ones
+ 
+```{r}
+vardf<-var %>% as_tibble() %>% rename(`Percent Variance`=value) %>% head() %>% mutate(PC=1:n())
+
+scree<-ggplot(vardf, aes(x=PC, y=`Percent Variance`)) +
+  geom_line() +
+  geom_point() +
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  scale_x_continuous(breaks = seq(1:6)) +
+  theme(axis.text = element_text(size=10)) +
+  theme(axis.title = element_text(size=14)) +
+  theme(plot.title = element_text(hjust=0, size=16))
+
+
+scree
+```
+
+
+## Call SNPs
+
+```{sh, eval=FALSE}
+srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 130 -bam bamlists/s144.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
+-out outputs/300/snps-wgs  \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/300/snps.out 2> outputs/300/snps.err &
+
+
+#create vcf
+plink --tped snps-wgs.tped --tfam snps-wgs.tfam  --out plink-binary --recode --allow-extra-chr --noweb
+plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-chr -out plink
+
+module load bcftools
+bcftools reheader -s ../../bamlists/s144.names -o plink-renamed.vcf plink.vcf
+bcftools +fill-tags plink-renamed.vcf | bcftools view -i 'F_MISSING < 0.10' | bcftools view -i 'INFO/MAF > 0.01' > filtered.vcf
+bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered.vcf > plink-pruned.vcf
+```
+
+
+
+```{r}
+snps<-import.snpR.data(genotypes = "outputs/300/plink-pruned.vcf", 
+      sample.meta = s144)
+```
+
+```{r}
+p <- plot_clusters(snps, facets = c("Pop"), viridis.option = "H")
+p$plot$pca
+```
+
+
+
+## LD
+
+```{sh, eval=FALSE}
+
+cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/300/filtered.vcf.gz > outputs/300/vcfs/$line.vcf; done;
+
+for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basename $f vcf`ldf --allow-extra-chr --double-id; done;
+
+```
+
+```{r, eval=FALSE}
+files<-list.files("outputs/300/vcfs",pattern = "*.ldf.ld", full.names = TRUE)
+
+plotLd<-function(file) {
+  chrom<-gsub("outputs/300/vcfs/","",file)
+  chrom<-gsub(".ldf.ld","", chrom)
+  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.5)
+
+  ggplot(lc) +
+  geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle(paste0(chrom))+
+  theme_bw() +
+  theme(panel.grid = element_blank())
+ggsave(paste0("outputs/300/chrom-ld/",chrom,".pdf"))
+}
+
+lapply(files, plotLd)
+```
+
+
+Scaffold 28 is interesting
+
+```{r}
+lc<-read.delim("outputs/300/vcfs/lcl|scaffold_28.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.2)
+
+  ggplot(lc) +
+  geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle("lcl|scaffold_28 LD")+
+  theme_bw() +
+  theme(panel.grid = element_blank())
+  
+ggsave("outputs/300/scaffold28-ld-plot.pdf")
+```
+
+Chrom PCS
+
+```{r, eval=FALSE}
+files<-list.files("outputs/300/vcfs",pattern = "*.vcf", full.names = TRUE)
+
+plotPCA<-function(file) {
+  meta<-yak
+  chrom<-gsub("outputs/300/vcfs/","",file)
+  chrom<-gsub(".vcf","", chrom)
+  
+  vcf<-read.vcfR(file=file)
+  genind<-vcfR2genind(vcf)
+  genind@pop<-as.factor(meta$Pop)
+
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(meta)
+eig<-pca1$eig/sum(pca1$eig)*100
+
+
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=Pop),pch=21, alpha=0.75, cex=2) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="H") +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") +
+  geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
+pc12
+
+ggsave(paste0("outputs/300/chrom-pcs/",chrom,".pdf"))
+}
+
+lapply(files, plotPCA)
 ```
