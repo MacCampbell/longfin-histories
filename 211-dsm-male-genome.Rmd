@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 
 ```{r}
 library(tidyverse)
+library(snpR)
 ```
 
 
@@ -87,4 +88,267 @@ edit run_difcover to include files
 
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=4 run_difcover.sh
 
-Running on both
+Running on both...
+
+Didn't complete:
+\\# Stage 2
+Can't open union.bed file ����sample1_sample2.unionbedcv
+
+Running manually
+
+
+~/DifCover/dif_cover_scripts/from_unionbed_to_ratio_per_window_CC0 sample1_sample2.unionbedcv 10 219 10 240 1000 500
+
+Stage 3
+
+~/DifCover/dif_cover_scripts/from_ratio_per_window__to__DNAcopy_output.sh sample1_sample2.ratio_per_w_CC0_a1_A1000000_b1_B1000000_v1000_l0 1.095
+
+Stage 4
+default p=2
+p=2             #threshold for enrichment scores to report in a separate file (for p=2 will report regions with coverage in sample1 being roughly 4 times larg
+er than coverage in sample2)
+
+~/DifCover/dif_cover_scripts/from_DNAcopyout_to_p_fragments.sh sample1_sample2.ratio_per_w_CC0_a1_A1000000_b1_B1000000_v1000_l0.log2adj_1.095.DNAcopyout 2
+
+~/DifCover/dif_cover_scripts/from_DNAcopyout_to_p_fragments.sh sample1_sample2.ratio_per_w_CC0_a1_A1000000_b1_B1000000_v1000_l0.log2adj_1.095.DNAcopyout 4
+Stage 5
+
+~/DifCover/dif_cover_scripts/get_DNAcopyout_with_length_of_intervals.sh *.DNAcopyout ref.length
+
+//generates *.len file that reports length of each interval and corresponding score
+
+generate_DNAcopyout_len_histogram.sh *.DNAcopyout.len 1 //generates rough histogram with given precision order
+generate_DNAcopyout_len_vs_scores_histogram_bin0.5
+
+
+## Looking at files
+(base) ➜  211 git:(main) ✗ mv sample1_sample2.ratio_per_w_CC0_a1_A1000000_b1_B1000000_v1000_l0.log2adj_1.095.pdf female-genome.pdf
+
+Our sample 1 is male and has higher coverage on a contig
+(base) ➜  211 git:(main) ✗ scp farm:~/longfin-histories/outputs/211/male/sample1_sample2.ratio_per_w_CC0_a1_A1000000_b1_B1000000_v1000_l0.log2adj_1.095 ./
+
+```{r}
+diff<-read_tsv("outputs/211/sample1_sample2.ratio_per_w_CC0_a1_A1000000_b1_B1000000_v1000_l0.log2adj_1.095")
+#diff<-read_tsv("outputs/211/sample1_sample2.ratio_per_w_CC0_a1_A1000000_b1_B1000000_v1000_l0.log2adj_1.095.DNAcopyout.up2", col_names=c("scaffold","window_start","window_end","X4","X5"))
+diff %>% group_by(scaffold) %>% summarize(Count=n())
+```
+```{r}
+ggplot(diff %>% filter(scaffold %in% c("CM038968.1","CM038949.1","CM038964.1","JAJTCG010000027.1","JAJTCG010000045.1"))) +
+  geom_point(aes(x=window_start, y=`1.095*log2(ratio)`)) +
+  facet_wrap(.~scaffold, scales="free_x")
+```
+
+````{r}
+diff %>% filter(scaffold %in% c("JAJTCG010000027.1")) %>% filter(`1.095*log2(ratio)`>5)
+```
+
+6029428 to 6432054 ...
+
+Let's call snps across here and see if anything turns up (expect to be male specific)
+
+samtools faidx GCA_021870715.1_mHypTra1_genomic.fna JAJTCG010000027.1:6029428-6432054 > JAJTCG010000027.1-region.fasta
+
+blastx of region against osmeridae
+
+
+We need a bamlist of male-aligned files:
+~/dsm-omics/bamlist/test80-male-ordered.bamlist
+
+80 samples.
+
+Call snps across this region, allowing different missing data%
+
+```{sh, eval=FALSE}
+srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 30 -bam /home/maccamp/dsm-omics/bamlists/test80-male-ordered.bamlist -ref /home/maccamp/genomes/hypomesus-male-genbank/GCA_021870715.1_mHypTra1_genomic.fna   \
+-r JAJTCG010000027.1:6029428-6432054 -out outputs/211/snps \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/211/snps.out 2> outputs/211/snps.err &
+```
+
+Male specific sequence will have low snp calls
+
+```{sh, eval=FALSE}
+srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 30 -bam /home/maccamp/dsm-omics/bamlists/test80-male-ordered.bamlist -ref /home/maccamp/genomes/hypomesus-male-genbank/GCA_021870715.1_mHypTra1_genomic.fna   \
+-r JAJTCG010000027.1:6140476-6164788 -out outputs/211/snps-peak \
+-minMaf 0.1 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/211/snps.out 2> outputs/211/snps.err &
+```
+
+
+Previously 
+JAJTCG010000045.1	315440	G	T	0.284631	35.374961
+JAJTCG010000045.1	314807	T	C	0.275006	42.616157
+
+(base) maccamp@farm:~/dsm-omics/outputs/1300/male$ gunzip -c *lrt0.gz | sort -k 6 -n | tail -n 20
+CM038964.1	14137220	C	A	0.176847	20.788142
+CM038964.1	14156520	A	G	0.175492	20.819978
+CM038964.1	14132925	A	T	0.175166	20.867353
+CM038964.1	14051975	G	A	0.248405	20.906476
+CM038964.1	14159021	C	A	0.175450	20.918446
+CM038964.1	14132893	A	T	0.175391	20.942493
+CM038964.1	14084396	C	T	0.294761	21.063633
+CM038964.1	14331762	G	A	0.098456	21.517287
+CM038964.1	14139516	G	A	0.181368	22.204631
+CM038964.1	14181148	G	A	0.181471	22.226514
+CM038964.1	14051976	C	G	0.245813	22.265669
+CM038964.1	14141638	C	T	0.181553	22.266526
+CM038964.1	14253596	A	G	0.107311	23.465082
+CM038964.1	14161124	G	A	0.187579	23.667504
+CM038964.1	14092000	T	A	0.288934	23.802286
+CM038964.1	14091999	T	A	0.286721	24.125272
+CM038964.1	14092003	T	A	0.285288	24.398430
+CM038964.1	14174652	T	C	0.329431	30.295822
+JAJTCG010000045.1	315440	G	T	0.284631	35.374961
+JAJTCG010000045.1	314807	T	C	0.275006	42.616157
+
+# Male align
+
+We need to align our data to the male assembly for comparision:
+~/genomes/hypomesus-male-genbank
+
+ maccamp@farm:~/dsm-omics/data/male-align$ cat ../../bamlists/test80.bamlist | perl -pe 's/_R1.sort.flt.bam//g'| while read line; do ln -s $line*fastq.gz . ; done;
+
+bash ../../doAlign-zipped.sh to-align-2.txt  /home/maccamp/genomes/hypomesus-male-genbank/GCA_021870715.1_mHypTra1_genomic.fna
+
+Hey, it worked! Path to data is `data/male-align/`    
+
+Running a silly gwas.
+
+Need our list of chroms
+cat GCA_021870715.1_mHypTra1_genomic.fna.fai | awk '{if ($2 > 1000000) print $1}' > github/dsm-omics/meta/male-1mb-seqs.txt
+```{r, eval=FALSE}
+mAlign<-m80 %>% mutate(Path=paste0("/home/maccamp/dsm-omics/data/male-align/",`Sample name`,".sort.flt.bam")) 
+mAlign %>% select(Path) %>% write_tsv("bamlists/test80-male.bamlist", col_names=FALSE)
+mAlign %>% select(Pheno) %>% write_tsv("bamlists/test80-male.pheno", col_names=FALSE)
+mAlign %>% arrange(Pheno) %>% write_tsv("bamlists/test80-male-ordered.bamlist", col_names=FALSE)
+```
+
+in outputs/1300/male
+`bash $HOME/dsm-omics/1300-do-asso.sh $HOME/dsm-omics/bamlists/test80-male.bamlist  $HOME/dsm-omics/meta/male-1mb-seqs.txt $HOME/dsm-omics/bamlists/test80-male.pheno`
+#putting in local
+(base) ➜  male git:(main) ✗ scp farm:~/dsm-omics/outputs/1300/male/*lrt0.gz .
+
+Read them all in    
+```{r}
+list<-list.files(path = "outputs/211/male", pattern="lrt0.gz", full.names = TRUE)
+lrts<-lapply(list, read_tsv) %>% bind_rows() %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
+  filter(log10p > 1)
+```
+
+
+```{r}
+ggplot(lrts %>% filter(Chromosome %in% c("JAJTCG010000045.1","CM038964.1"))) + geom_point(aes(x=Position, y=log10p, color=log10p), alpha=0.75, cex=0.7)+
+  geom_hline(yintercept = 6, lty=2, alpha=0.6) +
+  scale_color_gradient(low="grey",high="skyblue") +
+  theme_bw()+
+  theme(axis.text.x= element_text(angle=45,hjust=1)) +
+  theme(panel.grid = element_blank()) +
+  ylab("-log10(p)") +
+  ggtitle("Sex GWAS") +
+  facet_wrap(.~Chromosome, scales = "free_x") +
+  theme(plot.title = element_text(hjust=0.5))
+
+ggsave("outputs/211/male-prelim-sex-gwas-all-chroms.jpeg", width=14, height=14)
+```
+
+
+
+```{r}
+lrt<-read_tsv("outputs/211/male/JAJTCG010000045.1-asso.lrt0.gz") %>% bind_rows() %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%  filter(log10p > 1)
+
+lrt %>% arrange(-log10p)
+```
+
+JAJTCG010000045.1	314807	T	C	0.275006	42.616157	10.467858
+
+
+```{r}
+ggplot(lrt) + geom_point(aes(x=Position, y=log10p, color=log10p), alpha=0.75, cex=0.7)+
+  geom_hline(yintercept = 6, lty=2, alpha=0.6) +
+  scale_color_gradient(low="grey",high="skyblue") +
+  theme_bw()+
+  theme(axis.text.x= element_text(angle=45,hjust=1)) +
+  theme(panel.grid = element_blank()) +
+  ylab("-log10(p)") +
+  ggtitle("Sex GWAS") +
+  facet_wrap(.~Chromosome, scales = "free_x") +
+  theme(plot.title = element_text(hjust=0.5))
+```
+
+```{sh,eval=FALSE}
+srun -t 72:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 24 \
+-minInd 60 -bam bamlists/bamlists/test80-male-ordered.bamlist \
+-ref /home/maccamp/genomes/hypomesus-male-genbank/GCA_021870715.1_mHypTra1_genomic.fna \
+-r JAJTCG010000045.1:313807-315807 -out outputs/1300/male/snps-wgs \
+-minMaf 0.1 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/1300/male/snps-wgs.out 2> outputs/1300/male/snps-wgs.err &
+```
+
+
+```{r}
+lrts %>% filter(log10p > 6) %>% filter(Chromosome=="CM038964.1")
+CM038964<-lrts %>% filter(log10p > 5) %>% filter(Chromosome=="CM038964.1")
+min(CM038964$Position)
+max(CM038964$Position)
+
+```
+```{sh, eval=FALSE}
+srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 70 -bam /home/maccamp/dsm-omics/bamlists/test80-male-ordered.bamlist -ref /home/maccamp/genomes/hypomesus-male-genbank/GCA_021870715.1_mHypTra1_genomic.fna   \
+-r CM038964.1:14051975-14605770 -out outputs/211/snps-CM038964 \
+-minMaf 0.1 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/211/snps.out 2> outputs/211/snps.err &
+```
+	-> Number of sites retained after filtering: 625 
+base) maccamp@farm:~/longfin-histories/outputs/211$ grep 14161124 snps-CM038964.tped 
+CM038964.1 CM038964.1_14161124 0 14161124	G G	G G	G G	G A	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G A	G G	G G	G G	G G	G G	G G	G G	G G	G A	G G	G G	G G	G G	G G	G G	G G	G G	G A	G A	G A	G A	G G	G G	G G	G G	G A	G A	G A	G A	G G	G A	G A	G G	G A	G G	G G	G A	G A	G A	G G	G A	G A	G A	G G	G A	G A	G A	G A	G A	G A	G A	G A	G A	G A
+(base) maccamp@farm:~/longfin-histories/outputs/211$ grep 14174652 snps-CM038964.tped 
+(base) maccamp@farm:~/longfin-histories/outputs/211$ grep 14253596 snps-CM038964.tped 
+CM038964.1 CM038964.1_14253596 0 14253596	A A	A A	A A	A A	A A	A A	0 0	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A A	A G	A A	A A	A A	A G	A G	A G	A G	A A	A A	A A	A A	A G	A G	A G	A A	A G	A A	A A	A G	A A	A A	A A	A G	A G	A A	A A	A G	A A	A A	A A	A A	A G	A A	A A	A A	A G	A A	A G	A G
+
+
+14161124 is very close to being on target
+
+```{sh, eval=FALSE}
+srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 30 -bam /home/maccamp/dsm-omics/bamlists/test80-male-ordered.bamlist -ref /home/maccamp/genomes/hypomesus-male-genbank/GCA_021870715.1_mHypTra1_genomic.fna   \
+-r CM038964.1:14151124-14171124 -out outputs/211/hit \
+-minMaf 0.1 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/211/snps.out 2> outputs/211/snps.err &
+```
+
+Need a frequency of < .25
+```{r}
+ CM038964 %>% arrange(Frequency)
+```
+
+14181148 is fairly close
+
+plink --tped snps-CM038964.tped --tfam snps-CM038964.tfam --out plink-binary --recode --allow-extra-chr --noweb
+plink --tped hit.tped --tfam hit.tfam --out plink-binary --recode --allow-extra-chr --noweb
+
+plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-chr -out plink
+
+
+```{r}
+fish<-read_tsv("outputs/210/m80-ordered.bamlist", col_names = c("Path"))
+fish$Sample<-gsub("/home/maccamp/dsm-omics/data/SOMM51\\d/","",fish$Path)
+fish$Sample<-gsub("_R1.sort.flt.bam","",fish$Sample)
+fish$Sex<-gsub("^\\d\\d\\d\\d\\d","",fish$Sample)
+fish$Sex<-as.numeric(fish$Sex)
+fish<-fish %>% relocate(Sample, Sex, Path) %>% select(-Path)
+fish
+```
+```{r}
+snps<-import.snpR.data(genotypes = "outputs/211/plink.vcf", 
+      sample.meta = fish)
+```
+
+```{r}
+p <- plot_clusters(snps, facets = c("Sex"), viridis.option = "H")
+p$plot$pca
+```
+
+CM038964.1	14161124	CM038964.1_14161124	G	A	.	.	PR	GT	0/0	0/0	0/0	0/1	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/1	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/1	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/1	0/1	0/1	0/1	0/0	0/0	0/0	0/0	0/1	0/1	0/1	0/1	0/0	0/1	0/1	0/0	0/1	0/0	0/0	0/1	0/1	0/1	0/0	0/1	0/1	0/1	0/0	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1

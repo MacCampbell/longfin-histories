@@ -111,10 +111,17 @@ individuals, as in the kmers_table, and the second, phenotype_value, the phenoty
 numerical form.
 
 ```{r}
-m37<-read_csv("meta/m37.csv")
-m37 %>% select(SampleID, ybin) %>% rename("accession_id"="SampleID", "phenotype_value"="ybin") %>% write_tsv("meta/37.plink.pheno")
+m37<-read_csv("meta/m37.csv") %>% mutate(Pheno=ybin+1)
+m37 %>% select(SampleID, Pheno) %>% rename("accession_id"="SampleID", "phenotype_value"="Pheno") %>% write_tsv("meta/37.plink.pheno")
 ```
+(kmers) maccamp@farm:~/longfin-histories/outputs/202$ ln -s ~/longfin-histories/meta/37.plink.pheno ./phenotypes.pheno
 
-python2.7
-<KMERS-GWAS-PATH>/kmers_gwas.py --pheno phenotype.pheno
---kmers_table kmers_table -l 31 -p 8 --outdir output_dir
+Looking for kinship table so calculating
+~/kmers/bin/emma_kinship_kmers -t kmers_table -k 31 --maf 0.05 > kmers_table.kinship
+
+python ~/kmers/kmers_gwas.py  --pheno phenotypes.pheno --kmers_table kmers_table -l 31 -p 8 --outdir output_dir
+
+
+Convert to plink k-mers table conversion to PLINK binary format
+
+~/kmers/bin/kmers_table_to_bed -t kmers_table -k 31 -p phenotypes.pheno --maf 0.05 --mac 5 -b 10000000 -o output_fil

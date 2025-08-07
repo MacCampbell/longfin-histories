@@ -1,0 +1,45 @@
+---
+title: "300-polished-genome"
+output: html_document
+date: "2025-08-07"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+/home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
+
+I have data from saglam et al.
+
+```{r}
+sag<-read_csv("meta/saglam.csv", col_names=c("ID","Reads","Dedup","Cov")) %>% mutate(Path=paste0("data/polish-saglam/",ID,".sort.flt.bam"))
+sag$Pop<-gsub("_\\d+","",sag$ID)
+sag<-sag %>% relocate(Pop)
+```
+
+```{r}
+sag %>% filter(Dedup > 2e5) %>% group_by(Pop) %>% summarize(Count=n(), Mean=mean(Dedup), Median=median(Dedup))
+```
+
+```{r}
+ggplot(sag %>% filter(Dedup > 2e5)) +
+  geom_histogram(aes(x=Dedup)) 
+```
+
+
+## Generate covariance matrix for sanity check
+
+```{r}
+s144<-sag %>% filter(Dedup > 2e5)
+s144 %>% select(Path) %>% write_tsv("bamlists/s144.bamlist", col_names = FALSE)
+```
+
+```{r}
+srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12  $HOME/angsd/angsd -P 12  \
+-bam bamlists/s144.bamlist -ref /home/maccamp/genomes/longfin-chrom/lfs_final_scaff_assembly.fasta \
+-minInd 130 -minMapQ 20 -minQ 20 -GL 2 -doGLF 2 \
+-doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doIBS 1 -doCounts 1 -doCov 1 -makeMatrix 1 -minMaf 0.05 \
+-out outputs/300/s144-ibs-90 >outputs/300/s144-ibs-90.out 2> outputs/300/s144-ibs-90.err &
+```
