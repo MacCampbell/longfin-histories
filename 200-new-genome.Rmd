@@ -54,6 +54,7 @@ Previous alignment
 df<-read_csv("meta/alt-demulti.txt", col_names = c("SampleID","Aligned","Dedup","Cov"))
 ddf<-left_join(df, fish) %>% mutate(Path=paste0("data/alt-demultiplexed/",SampleID,".sort.flt.bam"))
 ddf
+write_csv(ddf,"meta/lfs-life-history-meta.csv")
 ```
 
 let's compare

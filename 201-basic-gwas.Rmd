@@ -150,3 +150,45 @@ ggplot(df %>% filter(Chromosome %in% unique(dfs$Chromosome))) +
 
 ggsave("outputs/200/longfin-HS-LS-rand.pdf")
 ```
+
+
+
+## What about the other two phenos?
+
+```{r}
+m200<-read_csv("meta/m200.csv")
+m200 %>% group_by(clust_name_100) %>% summarize(Count=n())
+```
+
+HS vs LS (done)
+HS vs MS 26 fish
+MS vs LS 30
+
+```{r}
+hm<-m200 %>% filter(clust_name_100 %in% c("HS","MS")) 
+hm %>% select(Path) %>% write_tsv(col_names=FALSE, file="bamlists/hm26.bamlist")
+hm %>% mutate(ybin=ifelse(clust_name_100=="HS",0,1)) %>% select(ybin) %>% write_tsv(col_names=FALSE, file="bamlists/hm26.pheno")
+
+lm<-m200 %>% filter(clust_name_100 %in% c("LS","MS")) 
+lm %>% select(Path) %>% write_tsv(col_names=FALSE, file="bamlists/lm30.bamlist")
+lm %>% mutate(ybin=ifelse(clust_name_100=="LS",0,1)) %>% select(ybin) %>% write_tsv(col_names=FALSE, file="bamlists/lm30.pheno")
+```
+
+
+
+```{sh, eval=FALSE}
+ srun -p high -t 4:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
+ $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/hm26.pheno \
+ -GL 1 -nThreads 12 -minInd 13 -rf outputs/101/chrom-regions.txt \
+ -minMapQ 10 -minQ 20 -minMaf 0.05 \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/201/do-asso-hm \
+  -bam bamlists/hm26.bamlist > outputs/201/do-asso-lm.out 2> outputs/201/do-asso-hm.err &
+  
+srun -p high -t 4:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
+ $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/lm30.pheno \
+ -GL 1 -nThreads 12 -minInd 15 -rf outputs/101/chrom-regions.txt \
+ -minMapQ 10 -minQ 20 -minMaf 0.05 \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/201/do-asso-hm \
+  -bam bamlists/lm30.bamlist > outputs/201/do-asso-lm.out 2> outputs/201/do-asso-lm.err &
+
+```

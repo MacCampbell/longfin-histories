@@ -1,0 +1,61 @@
+---
+title: "301-rooted-phylogeny"
+output: html_document
+date: "2025-08-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message = FALSE)
+```
+
+
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(ggplotify)
+```
+
+Reference genome: /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
+
+I have data from Saglam et al. aligned to this reference.
+
+```{r}
+sag<-read_csv("meta/saglam.csv", col_names=c("ID","Reads","Dedup","Cov")) %>% mutate(Path=paste0("data/polish-saglam/",ID,".sort.flt.bam"))
+sag$Pop<-gsub("_\\d+","",sag$ID)
+sag$Pop<-factor(sag$Pop, levels=c("ALVS","CHPI","SFBY","PETA","SUIB","HUMB","COLR","LWSH","PTLC","HRLC","SKNA","YBAK"))
+sag<-sag %>% relocate(Pop)
+missing<-read_tsv("outputs/300/missingness.stats", col_names = c("ID","Missing"))
+sag<-left_join(sag,missing)
+sag
+```
+```{r}
+ggplot(sag) +
+  geom_point(aes(x=Dedup, y=Missing, fill=Pop), pch=21) +
+  #facet_wrap(.~Pop) +
+   xlim(0,5e5)
+```
+
+```{r}
+s129<-sag %>% filter(Dedup > 2e5 & Missing < 0.15) 
+s129 %>% group_by(Pop) %>% summarize(Count=n(), Mean=mean(Dedup), Median=median(Dedup))
+
+```
+
+```{r}
+ggplot(s129) +
+  geom_histogram(aes(x=Dedup)) 
+```
+
+```{r}
+ggplot(s129) +
+  geom_point(aes(x=Dedup, y=Missing, fill=Pop), pch=21) 
+ 
+```
+
+Should probably downsample to 1e6
+
+```{r}
+bc<-sag %>% filter(Pop %in% c("SKNA","PTLC","HRLC")) %>% filter(Dedup > 2e5)
+bc %>% group_by(Pop) %>% summarize(Count=n(), Mean=mean(Dedup), Median=median(Dedup))
+```
+

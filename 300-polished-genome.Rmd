@@ -11,11 +11,12 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(tidyverse)
 library(ggpubr)
+library(ggplotify)
 ```
 
 Reference genome: /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
 
-I have data from Saglam et al.
+I have data from Saglam et al. aligned to this reference.
 
 ```{r}
 sag<-read_csv("meta/saglam.csv", col_names=c("ID","Reads","Dedup","Cov")) %>% mutate(Path=paste0("data/polish-saglam/",ID,".sort.flt.bam"))
@@ -50,9 +51,17 @@ srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task
 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doIBS 1 -doCounts 1 -doCov 1 -makeMatrix 1 -minMaf 0.05 \
 -out outputs/300/s144-ibs-90 >outputs/300/s144-ibs-90.out 2> outputs/300/s144-ibs-90.err &
+
+srun -p high -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12  $HOME/angsd/angsd -P 12  \
+-bam bamlists/s144.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \ 
+-minInd 108 -minMapQ 20 -minQ 20 -GL 2 -doGLF 2 \
+-doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doIBS 1 -doCounts 1 -doCov 1 -makeMatrix 1 -minMaf 0.05 \
+-out outputs/300/s144-ibs-75 >outputs/300/s144-ibs-75.out 2> outputs/300/s144-ibs-75.err &
 ```
 
-	-> Number of sites retained after filtering: 60378 
+	-> Number of sites retained after filtering: 60378 @ 90%
 
 
 ```{r}
@@ -109,6 +118,8 @@ Scree plot
  
  These are two SFBY ones, as well as the two weird YBAK ones
  
+ These SFBY ones have a lot of missing data
+ 
 ```{r}
 vardf<-var %>% as_tibble() %>% rename(`Percent Variance`=value) %>% head() %>% mutate(PC=1:n())
 
@@ -120,12 +131,14 @@ scree<-ggplot(vardf, aes(x=PC, y=`Percent Variance`)) +
   scale_x_continuous(breaks = seq(1:6)) +
   theme(axis.text = element_text(size=10)) +
   theme(axis.title = element_text(size=14)) +
-  theme(plot.title = element_text(hjust=0, size=16))
+  theme(plot.title = element_text(hjust=0, size=16)) +
+  theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  ggtitle("A") +
+  theme(plot.title = element_text(hjust=0, size=16)) 
 
 
 scree
 ```
-
 
 ## Call SNPs
 
@@ -148,11 +161,32 @@ bcftools +fill-tags plink-renamed.vcf | bcftools view -i 'F_MISSING < 0.10' | bc
 bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered.vcf > plink-pruned.vcf
 ```
 
+	-> Number of sites retained after filtering: 25402 
 
+Filter for missing individuals
+
+```{sh, eval=FALSE}
+paste \
+<(bcftools query -f '[%SAMPLE\t]\n' filtered.vcf.gz | head -1 | tr '\t' '\n') \
+<(bcftools query -f '[%GT\t]\n' filtered.vcf.gz | awk -v OFS="\t" '{for (i=1;i<=NF;i++) if ($i == "./.") sum[i]+=1 } END {for (i in sum) print i, sum[i] / NR }' | sort -k1,1n | cut -f 2) > missingness.stats
+````
+
+PTLC_006	0.194709
+PTLC_010	0.204984
+SFBY_134	0.209432
+PTLC_014	0.222148
+PTLC_028	0.241713
+SFBY_083	0.268089
+PTLC_013	0.287655
+PTLC_019	0.297457
+COLR_003	0.367806
+SFBY_075	0.470711
+
+Wow! These fish have over 20% missing calls.
 
 ```{r}
-snps<-import.snpR.data(genotypes = "outputs/300/plink-pruned.vcf", 
-      sample.meta = s144)
+snps<-import.snpR.data(genotypes = "outputs/300/plink-pruned.vcf.gz", 
+      sample.meta = s144 %>% select(Pop))
 ```
 
 ```{r}
@@ -178,7 +212,7 @@ files<-list.files("outputs/300/vcfs",pattern = "*.ldf.ld", full.names = TRUE)
 plotLd<-function(file) {
   chrom<-gsub("outputs/300/vcfs/","",file)
   chrom<-gsub(".ldf.ld","", chrom)
-  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.5)
+  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.1)
 
   ggplot(lc) +
   geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
@@ -193,28 +227,115 @@ lapply(files, plotLd)
 ```
 
 
-Scaffold 28 is interesting
 
 ```{r}
-lc<-read.delim("outputs/300/vcfs/lcl|scaffold_28.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.2)
+lc<-read.delim("outputs/300/vcfs/lcl|scaffold_26.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.2)
 
   ggplot(lc) +
   geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
   scale_color_gradient(low="khaki1", high="red") + 
-  ggtitle("lcl|scaffold_28 LD")+
+  ggtitle("lcl|scaffold_26 LD")+
   theme_bw() +
   theme(panel.grid = element_blank())
   
-ggsave("outputs/300/scaffold28-ld-plot.pdf")
+ggsave("outputs/300/scaffold26-ld-plot.pdf")
 ```
 
-Chrom PCS
+```{r}
+lc2<-lc %>% filter(BP_A > 8.25e6)
+
+ggplot(lc2) +
+  geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle("lcl|scaffold_26 LD")+
+  theme_bw() +
+  theme(panel.grid = element_blank())
+
+```
+Getting region of interest
+bcftools view lcl\|scaffold_26.vcf.gz -r 'lcl|scaffold_26':8.25e6- > linkage-26.vcf
+
+
+# Check loadings
+```{r}
+vcf<-read.vcfR(file="outputs/300/vcfs/linkage-26.vcf")
+genind<-vcfR2genind(vcf)
+genind@pop<-as.factor(s144$Pop)
+```
+
+
+```{r}
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(s144)
+
+eig<-pca1$eig/sum(pca1$eig)*100
+```
+
+```{r}
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=Pop), alpha=0.75, cex=2, pch=21) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="H") +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") 
+pc12
+```
+```{r}
+annotcols<-df %>% select(Axis1) %>% mutate(Sex = ifelse(Axis1 > 0, "Female","Male")) %>% select(-Axis1)
+```
+```{r}
+loadings<-pca1$c1 %>% as_tibble()
+loadings$Allele<-rownames(pca1$c1) 
+
+loadings
+loadings$Position<-gsub("lcl\\|.*_|\\.\\d$","",loadings$Allele)
+loadings$Position<-as.numeric(loadings$Position)
+loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .45) %>% select(-CS2, -CS3) %>% 
+  mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
+
+tops %>% relocate(Chrom, Position, CS1)
+
+```
+
+## Let's make a heatmap  here
+
+```{r}
+library(pheatmap)
+ddf<-read_tsv("outputs/300/snps-wgs.geno.gz", col_names = c("FALSE")) %>% select(-X147)
+ddf[ddf==-1]<-NA
+ddf<-ddf %>% filter(`FALSE`=="lcl|scaffold_26")
+ddf2<-ddf %>% filter(X2 %in% tops$Position)
+m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Sex<-annotcols$Sex
+annot
+```
+
+```{r}
+as.ggplot(pheatmap(m, annotation_col = annot, cluster_rows = TRUE,
+                   labels_col = s144$ID, labels_row = ddf2$X2, fontsize_row = 14, fontsize_col = 6)) +
+  ggtitle("Heatmap of Longfin Smelt Variants on scaffold_26\n") + 
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/300/lfs-sex-heatmap.pdf", width=20, height=12)
+```
+
+#Chrom PCS
 
 ```{r, eval=FALSE}
 files<-list.files("outputs/300/vcfs",pattern = "*.vcf", full.names = TRUE)
 
 plotPCA<-function(file) {
-  meta<-yak
+  meta<-s144
   chrom<-gsub("outputs/300/vcfs/","",file)
   chrom<-gsub(".vcf","", chrom)
   
@@ -241,7 +362,7 @@ pc12<-ggplot(df) +
   scale_fill_viridis_d(option="H") +
   guides(fill = guide_legend(override.aes = list(pch = 22))) +
   theme(legend.position = "top") +
-  geom_text_repel(aes(x=Axis1, y=Axis2,label=SampleID))
+  geom_text_repel(aes(x=Axis1, y=Axis2,label=ID))
 pc12
 
 ggsave(paste0("outputs/300/chrom-pcs/",chrom,".pdf"))
@@ -249,3 +370,39 @@ ggsave(paste0("outputs/300/chrom-pcs/",chrom,".pdf"))
 
 lapply(files, plotPCA)
 ```
+
+
+Make phylo
+
+outputs/300/plink-pruned.vcf.gz
+
+conda activate py2;
+~/github/mccloud-rrt/vcf2phylip.py -i plink-pruned.vcf.gz;
+conda deactivate
+
+removing SFBY_75 and 83 due to missingness
+COLR_03 has a lot of missing data to
+
+iqtree2  -nt AUTO -m MFP+ASC -bb 1000 -s plink-pruned.min4.phy --seqtype DNA --redo
+iqtree2  -nt AUTO -m MFP+ASC -bb 10000 -s plink-pruned.min4.phy.varsites.phy --seqtype DNA --redo
+
+```{r}
+library(ape)
+dat<-read.dna(file="outputs/300/trees/plink-pruned.min4.phy")
+write.nexus.data(dat, file="outputs/300/trees/plink-pruned.min4.nex")
+```
+
+
+Getting night smelt or others, have six night smelt in data/night
+
+/home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
+
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa
+
+(base) maccamp@farm:~/longfin-histories/data/night$ cat *stats
+Night01,1419907,664540,0.142485
+Night02,3506968,1655132,0.36273
+Night03,5603663,2306524,0.50107
+Night04,1826813,849640,0.182858
+Night05,5981135,2311750,0.489617
+Night06,4802268,1986320,0.429618
