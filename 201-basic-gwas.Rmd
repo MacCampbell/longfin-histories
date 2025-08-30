@@ -179,16 +179,52 @@ lm %>% mutate(ybin=ifelse(clust_name_100=="LS",0,1)) %>% select(ybin) %>% write_
 ```{sh, eval=FALSE}
  srun -p high -t 4:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
  $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/hm26.pheno \
- -GL 1 -nThreads 12 -minInd 13 -rf outputs/101/chrom-regions.txt \
+ -GL 1 -nThreads 12 -minInd 13 \
  -minMapQ 10 -minQ 20 -minMaf 0.05 \
  -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/201/do-asso-hm \
-  -bam bamlists/hm26.bamlist > outputs/201/do-asso-lm.out 2> outputs/201/do-asso-hm.err &
+  -bam bamlists/hm26.bamlist > outputs/201/do-asso-hm.out 2> outputs/201/do-asso-hm.err &
   
 srun -p high -t 4:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
  $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/lm30.pheno \
- -GL 1 -nThreads 12 -minInd 15 -rf outputs/101/chrom-regions.txt \
+ -GL 1 -nThreads 12 -minInd 15 \
  -minMapQ 10 -minQ 20 -minMaf 0.05 \
- -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/201/do-asso-hm \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/201/do-asso-lm \
   -bam bamlists/lm30.bamlist > outputs/201/do-asso-lm.out 2> outputs/201/do-asso-lm.err &
 
 ```
+
+(base) maccamp@farm:~/longfin-histories/outputs/201$ gunzip -c do-asso-hm.lrt0.gz  | sort -n -k 6 | tail
+lcl|scaffold_11	4780263	C	T	0.254976	14.715204
+lcl|scaffold_6	12592522	G	T	0.178177	14.734411
+lcl|scaffold_4	17278636	T	A	0.198278	15.100863
+lcl|scaffold_21	14360601	C	A	0.273048	16.003798
+lcl|scaffold_3	2961157	G	C	0.392491	16.218962
+lcl|scaffold_15	10908589	T	C	0.409366	16.427263
+lcl|scaffold_10	10245629	C	T	0.375708	17.048462
+lcl|scaffold_5	21402014	T	C	0.222451	17.698836
+lcl|scaffold_35	1085839	T	G	0.475804	17.733960
+lcl|scaffold_8	5713096	T	G	0.220196	18.144262
+
+ase) maccamp@farm:~/longfin-histories/outputs/201$ gunzip -c do-asso-lm.lrt0.gz  | sort -n -k 6 | tail
+lcl|scaffold_177	65249	G	A	0.201322	14.225899
+lcl|scaffold_137	11790	A	G	0.184370	14.463646
+lcl|scaffold_2	7076913	C	T	0.136348	14.549636
+lcl|scaffold_18	2734141	G	A	0.271149	14.717956
+lcl|scaffold_13	1844224	A	G	0.470526	14.773842
+lcl|scaffold_8	9032867	T	C	0.277918	14.904999
+lcl|scaffold_13	1844210	G	A	0.100926	15.171099
+lcl|scaffold_11	12767195	C	A	0.135324	16.424976
+lcl|scaffold_3	11955169	A	C	0.283033	17.124473
+lcl|scaffold_321	35814	A	G	0.187799	18.887605
+
+(base) maccamp@farm:~/longfin-histories/outputs/201$ gunzip -c do-asso.lrt0.gz  | sort -n -k 6 | tail
+lcl|scaffold_1	13190054	A	G	0.126897	15.419654
+lcl|scaffold_19	9609023	T	A	0.188727	15.422207
+lcl|scaffold_14	2068807	A	G	0.217303	15.471566
+lcl|scaffold_22	7127011	T	G	0.202647	15.651682
+lcl|scaffold_22	7127030	G	C	0.202942	15.681280
+lcl|scaffold_17	3006497	T	C	0.159525	15.819333
+lcl|scaffold_27	6664026	C	T	0.139077	15.873745
+lcl|scaffold_9	11143286	A	C	0.399098	16.210282
+lcl|scaffold_9	3534840	A	G	0.285408	16.259896
+lcl|scaffold_26	1383166	C	T	0.193978	18.457351

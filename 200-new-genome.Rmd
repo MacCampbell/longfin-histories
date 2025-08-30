@@ -79,6 +79,7 @@ m100 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/53.bamlist
 # Four more fish here!
 
 m200<-gdf %>% filter(Dedup > 2e5)
+write_csv(m200, "meta/m200.csv")
 m200 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/46.bamlist")
 
 m300<-gdf %>% filter(Dedup > 3e5)

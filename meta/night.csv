@@ -1,0 +1,7 @@
+Pop,ID,Reads,Dedup,Cov,Path
+Night,Night01,1419907,664540,0.142485,data/night/Night01.sort.flt.bam
+Night,Night02,3506968,1655132,0.36273,data/night/Night02.sort.flt.bam
+Night,Night03,5603663,2306524,0.50107,data/night/Night03.sort.flt.bam
+Night,Night04,1826813,849640,0.182858,data/night/Night04.sort.flt.bam
+Night,Night05,5981135,2311750,0.489617,data/night/Night05.sort.flt.bam
+Night,Night06,4802268,1986320,0.429618,data/night/Night06.sort.flt.bam

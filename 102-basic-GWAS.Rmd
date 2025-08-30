@@ -60,9 +60,9 @@ df <- data %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
   mutate(p = dchisq(LRT, df=1)) %>%
   mutate(bonfer = p.adjust(p, method = "bonferroni")) %>% 
   mutate(BHfdr = p.adjust(p, method = "BH")) %>%
-  group_by(Chromosome) %>%
-  mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
-  mutate(BHfdrchrom = p.adjust(p, method = "BH"))
+    group_by(Chromosome) %>%
+    mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
+    mutate(BHfdrchrom = p.adjust(p, method = "BH"))
 
 dfs<-df %>% arrange(-LRT) %>% head(n=20)
 dfs
