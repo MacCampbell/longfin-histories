@@ -9,6 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
+library(ape)
 library(tidyverse)
 library(ggpubr)
 library(ggplotify)
@@ -163,6 +164,8 @@ module load bcftools
 bcftools reheader -s ../../bamlists/s144.names -o plink-renamed.vcf plink.vcf
 bcftools +fill-tags plink-renamed.vcf | bcftools view -i 'F_MISSING < 0.10' | bcftools view -i 'INFO/MAF > 0.01' > filtered.vcf
 bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered.vcf > plink-pruned.vcf
+bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode maxAF filtered.vcf > plink-pruned-max.vcf
+
 ```
 
 	-> Number of sites retained after filtering: 25402 
@@ -189,8 +192,19 @@ SFBY_075	0.470711
 Wow! These fish have over 20% missing calls.
 
 ```{r}
-snps<-import.snpR.data(genotypes = "outputs/300/plink-pruned.vcf.gz", 
+snpsRAND<-import.snpR.data(genotypes = "outputs/300/plink-pruned.vcf.gz", 
       sample.meta = s144 %>% select(Pop))
+
+snps<-import.snpR.data(genotypes = "outputs/300/plink-pruned-max.vcf", 
+      sample.meta = s144 %>% select(Pop))
+
+```
+
+```{r}
+p <- plot_clusters(snpsRAND, facets = c("Pop"), viridis.option = "H")
+p$plot$pca
+
+ggsave("outputs/300/lfs-pca-rand.jpeg")
 ```
 
 ```{r}
@@ -393,7 +407,6 @@ iqtree2  -nt AUTO -m MFP+ASC -bb 1000 -s plink-pruned.min4.phy --seqtype DNA --r
 iqtree2  -nt AUTO -m MFP+ASC -bb 10000 -s plink-pruned.min4.phy.varsites.phy --seqtype DNA --redo
 
 ```{r}
-library(ape)
 dat<-read.dna(file="outputs/300/trees/plink-pruned.min4.phy")
 write.nexus.data(dat, file="outputs/300/trees/plink-pruned.min4.nex")
 ```
@@ -438,13 +451,118 @@ srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/300/snps-phylo.out 2> outputs/300/snps-phylo.err &
 
+#	-> Number of sites retained after filtering: 31185 
 
-#create vcf
-plink --tped snps-wgs.tped --tfam snps-wgs.tfam  --out plink-binary --recode --allow-extra-chr --noweb
-plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-chr -out plink
+
+#create vcf (I should make a basic script to convert, prune and whatnot at a certain MAF)
+plink --tped snps-wgs-phylo.tped --tfam snps-wgs-phylo.tfam  --out plink-binary-phylo --recode --allow-extra-chr --noweb
+plink --ped plink-binary-phylo.ped --map plink-binary-phylo.map --recode vcf --allow-extra-chr -out plink-phylo
 
 module load bcftools
-bcftools reheader -s ../../bamlists/s144.names -o plink-renamed.vcf plink.vcf
-bcftools +fill-tags plink-renamed.vcf | bcftools view -i 'F_MISSING < 0.10' | bcftools view -i 'INFO/MAF > 0.01' > filtered.vcf
-bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered.vcf > plink-pruned.vcf
+bcftools reheader -s ../../bamlists/148.names -o plink-phylo-renamed.vcf plink-phylo.vcf
+bcftools +fill-tags plink-phylo-renamed.vcf | bcftools view -i 'F_MISSING < 0.10' | bcftools view -i 'INFO/MAF > 0.10' > filtered-phylo.vcf
+
+#Need to try a lower MAF I think
+#this command hasn't been run
+bcftools +fill-tags plink-phylo-renamed.vcf | bcftools view -i 'F_MISSING < 0.10' | bcftools view -i 'INFO/MAF > 0.05' > filtered-phylo-05.vcf
+
+bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered-phylo.vcf > plink-phylo-pruned.vcf
+#placement of the night isn't great what about 
+
+bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode maxAF filtered-phylo.vcf > plink-phylo-pruned-max.vcf
+
+bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode maxAF filtered-phylo-05.vcf > plink-phylo-pruned-max05.vcf
+
+bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered-phylo-05.vcf > plink-phylo-pruned-rand.vcf
+
 ```
+ in outputs/300/night
+ 
+ 
+Checking missing data
+
+```{sh, eval=FALSE}
+paste \
+<(bcftools query -f '[%SAMPLE\t]\n' plink-phylo-pruned.vcf | head -1 | tr '\t' '\n') \
+<(bcftools query -f '[%GT\t]\n' plink-phylo-pruned.vcf | awk -v OFS="\t" '{for (i=1;i<=NF;i++) if ($i == "./.") sum[i]+=1 } END {for (i in sum) print i, sum[i] / NR }' | sort -k1,1n | cut -f 2) > missingness.stats
+````
+
+These have a lot of missing data
+
+(base) ➜  night git:(main) ✗ cat missingness.stats | sort -k 2 -n | tail
+SKNA_049	0.245657
+LWSH_050	0.249697
+PTLC_006	0.252121
+SFBY_134	0.288889
+PTLC_014	0.290909
+PTLC_010	0.292929
+PTLC_028	0.369697
+PTLC_013	0.396768
+PTLC_019	0.407273
+COLR_003	0.471919
+
+conda activate py2;
+~/github/mccloud-rrt/vcf2phylip.py -i plink-phylo-pruned.vcf;
+~/github/mccloud-rrt/vcf2phylip.py -i plink-phylo-pruned-max.vcf;
+
+conda deactivate
+
+
+
+iqtree2  -nt AUTO -m MFP+ASC -bb 1000 -s plink-phylo-pruned.min4.phy --seqtype DNA --redo
+iqtree2  -nt AUTO -m MFP+ASC -bb 10000 -s plink-phylo-pruned.min4.phy.varsites.phy --seqtype DNA --redo
+
+iqtree2  -nt AUTO -m MFP+ASC -bb 1000 -s plink-phylo-pruned-max.min4.phy --seqtype DNA --redo
+iqtree2  -nt AUTO -m MFP+ASC -bb 10000 -s plink-phylo-pruned-max.min4.phy.varsites.phy --seqtype DNA --bcor 0.95 --redo
+
+removed three SFBY sequences, perhaps hybrids or high missing data?
+
+SFBY 142
+SFBY 148
+SFBY 134
+
+iqtree2  -nt AUTO -m MFP+ASC -bb 1000 -s down.phy --seqtype DNA --redo
+iqtree2  -nt AUTO -m MFP+ASC -bb 1000 -s down.phy.varsites.phy --seqtype DNA --redo
+
+```{r}
+dat<-read.dna(file="outputs/300/night/plink-phylo-pruned.min4.phy")
+write.nexus.data(dat, file="outputs/300/night/plink-phylo-pruned.min4.nex")
+
+dat<-read.dna(file="outputs/300/night/plink-phylo-pruned-max.min4.phy")
+write.nexus.data(dat, file="outputs/300/night/max.nex")
+
+
+dat<-read.dna(file="outputs/300/night/down-max.phy.varsites.phy")
+write.nexus.data(dat, file="outputs/300/night/down-max.nex")
+
+
+dat<-read.dna(file="outputs/300/allsnps/filtered-phylo-05.min4.phy")
+write.nexus.data(dat, file="outputs/300/allsnps/allsnps05.nex")
+
+dat<-read.dna(file="outputs/300/allsnps/filtered-phylo.min4.phy")
+write.nexus.data(dat, file="outputs/300/allsnps/allsnps.nex")
+```
+
+I think we need to downsample the fish in SFBY...
+
+Dowsampled southern group for 80 total fsih
+
+iqtree2  -nt AUTO -m MFP+ASC -bb 10000 -s down-max.phy --seqtype DNA --redo
+iqtree2  -nt AUTO -m MFP+ASC -bb 10000 -s down-max.phy.varsites.phy --seqtype DNA --redo
+
+Hmmm...
+
+https://www.sciencedirect.com/science/article/pii/S1055790324001222 doesn't prune snps
+
+
+in outputs/300/allsnps
+
+conda activate py2;
+~/github/mccloud-rrt/vcf2phylip.py -i filtered-phylo-05.vcf;
+~/github/mccloud-rrt/vcf2phylip.py -i filtered-phylo.vcf;
+
+conda deactivate
+
+iqtree2  -nt AUTO -m MFP+ASC -bb 1000 -s filtered-phylo.min4.phy --seqtype DNA --redo
+iqtree2  -nt AUTO -m MFP+ASC -bb 10000 -s filtered-phylo.min4.phy.varsites.phy --seqtype DNA --redo
+

@@ -1,0 +1,131 @@
+---
+title: "212-subtraction"
+output: html_document
+date: "2025-10-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+fish<-read_tsv("outputs/210/m80-ordered.bamlist", col_names = c("Path"))
+fish$Sample<-gsub("/home/maccamp/dsm-omics/data/SOMM51\\d/","",fish$Path)
+fish$Sample<-gsub("_R1.sort.flt.bam","",fish$Sample)
+fish$Sex<-gsub("^\\d\\d\\d\\d\\d","",fish$Sample)
+fish$Sex<-as.numeric(fish$Sex)
+fish<-fish %>% relocate(Sample, Sex, Path)
+fish %>% select(Sample) %>% write_tsv("bamlists/test80.names", col_names = FALSE)
+fish %>% select(Path) %>% write_tsv("bamlists/test80.bamlist", col_names = FALSE)
+fish
+```
+
+
+Let's look at unaligned and male specific sequence
+
+annot$Sex<-gsub("1","Female",annot$Sex)
+annot$Sex<-gsub("2","Male",annot$Sex)
+
+https://pmc.ncbi.nlm.nih.gov/articles/PMC11481317/
+
+_1_ Identify the highest coverage 10 females and 10 males (and omit ones Mac finds suspicious)
+_2_ Extract unaligned sequences from males/females
+_3_ De novo asssemble unaligned male data, SPADES (?)
+_4_ Realign unaligned male/female data to de denovo assembly
+_5_ Separate male specific contigs as candidate sex markers
+_6_ Use other sequences to verify male specificity (not from the original 10 highest coverage)
+
+samtools flagstat 121922_R1.sort.bam 87140918 + 0 mapped (92.27% : N/A)
+samtools flagstat 401432_R1.sort.bam 80013837 + 0 mapped (93.39% : N/A)
+
+samtools flagstat 110611_R1.sort.bam 56403988 + 0 mapped (93.22% : N/A)
+samtools flagstat 110381_R1.sort.bam 79366019 + 0 mapped (92.58% : N/A)
+
+
+New curated genome in 
+(base) maccamp@farm:~/genomes/hypomesus-curated$
+
+Checking busco 
+conda activate busco
+
+srun -p high -t 6:00:00 --mem=32GB --nodes=1 --cpus-per-task=12 busco -i fHypTra1.pri.cur.20251017.fasta -o busco -m genome -l actinopterygii_odb12 --cpu 12 --skip_bbtools
+
+ -------------------------------------------------------------------------------------------
+    |Results from dataset actinopterygii_odb12                                                 |
+    -------------------------------------------------------------------------------------------
+    |C:96.4%[S:95.5%,D:0.9%],F:1.2%,M:2.4%,n:7207,E:5.2%                                       |
+    |6949    Complete BUSCOs (C)    (of which 359 contain internal stop codons)                |
+    |6886    Complete and single-copy BUSCOs (S)                                               |
+    |63    Complete and duplicated BUSCOs (D)                                                  |
+    |88    Fragmented BUSCOs (F)                                                               |
+    |170    Missing BUSCOs (M)                                                                 |
+    |7207    Total BUSCO groups searched                                                       |
+    -------------------------------------------------------------------------------------------
+20
+
+
+We can link fish data in ./data/sub
+```{r}
+fish$Link<-gsub("1.sort.flt.bam","",fish$Path) 
+fish %>% select(Link) %>% write_tsv("outputs/212/link.tsv")
+#linking in all files
+```
+
+Set up names to work with 101.2-do-align.sh
+
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta
+
+
+We'll compare our alignment success rate to these ones
+
+samtools flagstat 121922.sort.bam 
+samtools flagstat 401432.sort.bam
+samtools flagstat 110611.sort.bam
+samtools flagstat 110381.sort.bam
+
+Then we can rerun our sex gwas
+```{r}
+m80<-fish %>% select(-Path, -Link) %>% mutate(Pheno=Sex-1) %>% mutate(Path=paste0("/home/maccamp/longfin-histories/data/sub/",Sample,".sort.flt.bam"))
+m80 %>% select(Pheno) %>% write_tsv("bamlists/80.pheno", col_names = FALSE)
+m80 %>% select(Path) %>% write_tsv("bamlists/80.bamlist", col_names = FALSE)
+
+```
+
+no -rf -rf meta/lates-lgs.txt
+```{sh, eval=FALSE}
+srun -t 72:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -P 12 \
+ -doAsso 1 -yBin $HOME/longfin-histories/bamlists/80.pheno -GL 1 -minInd 76 -minMaf 0.10 \
+ -minMapQ 20 -minQ 20 \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/212/asso-95 \
+ -bam $HOME/longfin-histories/bamlists/80.bamlist  > outputs/212/asso.out 2> outputs/212/asso.err &
+```
+
+```{r}
+files = list.files(path="outputs/212/", pattern="*.lrt0.gz", full.names = TRUE)
+list = lapply(files, read_tsv)
+data<-bind_rows(list)
+```
+
+```{r}
+df <- data %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
+  filter(log10p>=0 & log10p != "Inf") %>%
+  mutate(p = dchisq(LRT, df=1)) %>%
+  mutate(bonfer = p.adjust(p, method = "bonferroni")) %>% 
+  mutate(BHfdr = p.adjust(p, method = "BH")) %>%
+  group_by(Chromosome) %>%
+  mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
+  mutate(BHfdrchrom = p.adjust(p, method = "BH")) %>% ungroup() %>%
+  mutate(Index=1:n())
+
+df %>% arrange(-LRT) %>% head(n=20)
+```
+
+
+
+_1_ Identify the highest coverage 10 females and 10 males (and omit ones Mac finds suspicious)
+
