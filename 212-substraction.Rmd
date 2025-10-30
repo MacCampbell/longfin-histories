@@ -83,16 +83,23 @@ bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/hypomesus-curate
 
 We'll compare our alignment success rate to these ones
 
-samtools flagstat 121922.sort.bam 
-samtools flagstat 401432.sort.bam
-samtools flagstat 110611.sort.bam
-samtools flagstat 110381.sort.bam
+samtools flagstat 121922.sort.bam 91682741 + 0 mapped (97.01% : N/A)
+samtools flagstat 401432.sort.bam 83569992 + 0 mapped (97.45% : N/A)
+samtools flagstat 110611.sort.bam 58969314 + 0 mapped (97.41% : N/A)
+samtools flagstat 110381.sort.bam 83330826 + 0 mapped (97.15% : N/A)
 
 Then we can rerun our sex gwas
+'first two digits is a generation number, the three in the middle is a cross number, and the last number is for male/ female (1 or 2)."
 ```{r}
-m80<-fish %>% select(-Path, -Link) %>% mutate(Pheno=Sex-1) %>% mutate(Path=paste0("/home/maccamp/longfin-histories/data/sub/",Sample,".sort.flt.bam"))
+m80<-fish %>% select(-Path, -Link) %>% mutate(Pheno=Sex-1) %>% mutate(SexChar=ifelse(Sex==2, "Female","Male")) %>% mutate(Path=paste0("/home/maccamp/longfin-histories/data/sub/",Sample,".sort.flt.bam"))
 m80 %>% select(Pheno) %>% write_tsv("bamlists/80.pheno", col_names = FALSE)
 m80 %>% select(Path) %>% write_tsv("bamlists/80.bamlist", col_names = FALSE)
+
+#bind on data
+dat<- read_csv("outputs/212/curated.dat", col_names = c("Sample","Sort","Dedup","Cov"))
+dat$Sample<-as.character(dat$Sample)
+nm<-left_join(m80,dat)
+topc<-nm %>% group_by(SexChar) %>% top_n(10, Cov)
 
 ```
 
@@ -128,4 +135,86 @@ df %>% arrange(-LRT) %>% head(n=20)
 
 
 _1_ Identify the highest coverage 10 females and 10 males (and omit ones Mac finds suspicious)
+These may be ones that don't track with markers id'd by gwas
+_2_ Extract unaligned sequences from males/females
 
+(can try chrom by chrom pc)
+
+samtools view -b -f 4 file.bam > unmapped.bam
+samtools view -b -f 8 file.bam > unmapped.bam # both read1 and read2 unmapped
+using the sort.bam files
+
+```{r}
+topc %>% ungroup() %>% mutate(Command=paste0("samtools view -b -f 12 /home/maccamp/longfin-histories/data/sub/",Sample,".sort.bam > ",
+                              "/home/maccamp/longfin-histories/data/unmapped/",Sample,".bam; samtools collate -u -O /home/maccamp/longfin-histories/data/unmapped/",Sample,".bam | samtools fastq -1 /home/maccamp/longfin-histories/data/unmapped/",Sample,"-r1.fastq -2 /home/maccamp/longfin-histories/data/unmapped/",Sample,"-r2.fastq")) %>%
+  select(Command) %>% write_tsv("212.1-unmapped-commands.tsv", col_names = FALSE)
+```
+
+module load parallel
+srun -p high –time 4:00:00 –nodes=1 –ntasks-per-node=1 –cpus-per-task=11 parallel -j 11 < 212.1-unmapped-commands.tsv
+
+
+
+samtools flagstat 110381.bam (with -f 12)
+1889938 + 0 in total 
+1889938 + 0 paired in sequencing
+944969 + 0 read1
+944969 + 0 read2
+
+samtools collate -u -O 110381.bam | samtools fastq -1 110381-r1.fastq -2 110381-r2.fastq
+
+check for read through?
+flash 110381-r1.fastq 110381-r2.fastq -o 110381-flash --max-overlap 120  --min-overlap 20
+
+_3_ De novo asssemble unaligned male data, SPADES
+
+erro   1:16:02.922  3668M / 5153M ERROR   General                 (hammer_tools.cpp          : 194)   Pair of read files "/home/maccamp/longfin-histories>
+
+when back and redid with -f 12
+[M::bam2fq_mainloop] discarded 0 singletons
+[M::bam2fq_mainloop] processed 1889938 reads
+
+Can cat together several individual fastq files then run something like this:
+
+conda activate spades
+```{r, eval=FALSE}
+#trialing indonesian sample
+ind %>% filter(Lineage=="uwisara") %>% mutate(Command=paste0("srun -p bigmemm -t 168:00:00 --mem=520GB --nodes=1 --cpus-per-task=6 spades.py --phred-offset 33 -1 data/uwisara/",Run,"-R1.fastq.gz -2 data/uwisara/",Run,"-R2.fastq.gz -o data/denovo/",Run," > data/denovo/",Run,".out 2> data/denovo/",Run,".err &")) %>% select(Command) %>%
+  write_tsv("1301.2-spades.txt")
+```
+
+
+```{sh, eval=FALSE}
+srun -p bigmemm -t 48:00:00 --mem=256GB --nodes=1 --cpus-per-task=6 spades.py --phred-offset 33 -1 data/unmapped/110381-r1.fastq -2 data/unmapped/110381-r2.fastq -o data/unmapped/110381 > data/unmapped/110381.out 2> data/unmapped/110381.err & 
+
+#Spades with unpaired
+srun -p bigmemm -t 48:00:00 --mem=256GB --nodes=1 --cpus-per-task=6 spades.py --phred-offset 33 -1 data/unmapped/110381-flash.notCombined_1.fastq -2 data/unmapped/110381-flash.notCombined_2.fastq --merged data/unmapped/110381-flash.extendedFrags.fastq -o data/unmapped/110381-flash > data/unmapped/110381-flash.out 2> data/unmapped/110381-flash.err & 
+````
+
+
+Pretty similar assemblies
+Comparing spades flashed/unflashed scaffolds
+(base) maccamp@farm:~/longfin-histories/data/unmapped/110381$ assembledSeqStats.pl scaffolds.fasta 
+Number of Contigs	29419
+Total Bases	22325036
+No. of Contigs >=1000	6685
+Max Contig Length	15845
+
+(base) maccamp@farm:~/longfin-histories/data/unmapped/110381-flash$ assembledSeqStats.pl scaffolds.fasta 
+Number of Contigs	22714
+Total Bases	20086919
+No. of Contigs >=1000	6510
+Max Contig Length	15845
+
+For multiple fish, should I specify different libraries, or cat together reads?
+
+
+I like the plan of assembly of 2 x 5 different males and 2 x 5 females and checking for concordance.
+
+
+A
+
+mosdepth, installing with bioconda
+
+conda create -n mosdepth
+mamba install mosdepth
