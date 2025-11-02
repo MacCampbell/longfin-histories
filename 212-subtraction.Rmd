@@ -110,6 +110,12 @@ srun -t 72:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task
  -minMapQ 20 -minQ 20 \
  -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/212/asso-95 \
  -bam $HOME/longfin-histories/bamlists/80.bamlist  > outputs/212/asso.out 2> outputs/212/asso.err &
+ 
+ srun -t 72:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -P 12 \
+ -doAsso 1 -yBin $HOME/longfin-histories/bamlists/80.pheno -GL 1 -minInd 60 -minMaf 0.10 \
+ -minMapQ 20 -minQ 20 \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/212/asso-75 \
+ -bam $HOME/longfin-histories/bamlists/80.bamlist  > outputs/212/asso-75.out 2> outputs/212/asso-75.err &
 ```
 
 ```{r}
@@ -132,7 +138,24 @@ df <- data %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
 df %>% arrange(-LRT) %>% head(n=20)
 ```
 
+75%
+	-> Number of sites retained after filtering: 1242834 
+95%
+	-> Number of sites retained after filtering: 1136385 
 
+
+```{r}
+ggplot(df %>% filter(Chromosome %in% c("SUPER_1","SUPER_10"))) +
+  geom_point(aes(x=Position, y=log10p)) +
+  facet_wrap(.~Chromosome)
+```
+
+```{r}
+sub<-df %>% arrange(-LRT) %>% filter(Chromosome=="SUPER_10") %>% head(n=80) %>% arrange(Position)
+ggplot(sub) +
+  geom_point(aes(x=Position, y=log10p))
+sub %>% select(Chromosome, Position) %>% write_tsv("meta/212-sites.tsv", col_names = FALSE)
+```
 
 _1_ Identify the highest coverage 10 females and 10 males (and omit ones Mac finds suspicious)
 These may be ones that don't track with markers id'd by gwas
@@ -151,8 +174,8 @@ topc %>% ungroup() %>% mutate(Command=paste0("samtools view -b -f 12 /home/macca
 ```
 
 module load parallel
-srun -p high –time 4:00:00 –nodes=1 –ntasks-per-node=1 –cpus-per-task=11 parallel -j 11 < 212.1-unmapped-commands.tsv
-
+srun -p high --time 4:00:00 --nodes=1 --ntasks-per-node=1 --cpus-per-task=11 parallel -j 11 < 212.1-unmapped-commands.tsv
+(this command isn't working for whatever reason)
 
 
 samtools flagstat 110381.bam (with -f 12)
@@ -211,10 +234,103 @@ For multiple fish, should I specify different libraries, or cat together reads?
 
 I like the plan of assembly of 2 x 5 different males and 2 x 5 females and checking for concordance.
 
+aligning to/110381-flash scaffolds in data/110381-flash, indexing with bwa...
+aligning to/110381 scaffolds in data/110381, indexing with bwa...
 
-A
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/data/110381-flash/scaffolds.fasta
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/data/110381/scaffolds.fasta
+
+
 
 mosdepth, installing with bioconda
 
-conda create -n mosdepth
-mamba install mosdepth
+now to test across aligned files
+
+--quantize 0:1:4:100:200: # ... arbitary number of quantize bins.
+
+indicates bins of: 0:1, 1:4, 4:100, 100:200, 200:infinity where the upper endpoint is non-inclusive.
+0:0:1:
+--quantize 0:0:1:4:100:200 
+
+```{sh, eval=FALSE}
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 110381-depth 110381-realign.sort.bam
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 400281-depth 400281-realign.sort.bam
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 401261-depth 401261-realign.sort.bam
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 402281-depth 402281-realign.sort.bam
+
+
+
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 121922-depth 121922-realign.sort.bam
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 120092-depth 120092-realign.sort.bam
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 300662-depth 300662-realign.sort.bam
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 402282-depth 402282-realign.sort.bam
+
+
+```
+300662
+(base) maccamp@farm:~/longfin-histories/data/110381-flash$ grep NODE_15287_length_500_cov_5.371158 110381-depth.mosdepth.summary.txt 
+NODE_15287_length_500_cov_5.371158	500	3989	7.98	1	13
+(base) maccamp@farm:~/longfin-histories/data/110381-flash$ grep NODE_15287_length_500_cov_5.371158 121922-depth.mosdepth.summary.txt 
+NODE_15287_length_500_cov_5.371158	500	293	0.59	0	1
+
+ cat 121922-depth.mosdepth.summary.txt | awk '$4<1 {print}'
+ cat 120092-depth.mosdepth.summary.txt | awk '$4<1 {print}'
+ cat 402282-depth.mosdepth.summary.txt | awk '$4<1 {print}'
+grep NODE_15287_length_500_cov_5.371158 *depth.mosdepth.summary.txt 
+
+110381-depth.mosdepth.summary.txt:NODE_15287_length_500_cov_5.371158	500	3989	7.98	1	13
+120092-depth.mosdepth.summary.txt:NODE_15287_length_500_cov_5.371158	500	1311	2.62	0	6
+121922-depth.mosdepth.summary.txt:NODE_15287_length_500_cov_5.371158	500	293	0.59	0	1
+400281-depth.mosdepth.summary.txt:NODE_15287_length_500_cov_5.371158	500	3658	7.32	0	14
+
+grep NODE_22671_length_90_cov_21.461538	*depth.mosdepth.summary.txt 
+
+(base) maccamp@farm:~/longfin-histories/data/110381-flash$ grep NODE_10791_length_691_cov_2.491857 *depth.mosdepth.summary.txt
+110381-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	2867	4.15	1	7
+120092-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	4865	7.04	0	15
+121922-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	238	0.34	0	1
+300662-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	1987	2.88	0	6
+400281-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	4151	6.01	0	12
+401261-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	4154	6.01	0	12
+402281-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	3925	5.68	0	11
+402282-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	4962	7.18	0	17
+
+
+grep NODE_22650_length_91_cov_4.2857  *depth.mosdepth.summary.txt
+(base) maccamp@farm:~/longfin-histories/data/110381-flash$ grep NODE_22650_length_91_cov_4.2857  *depth.mosdepth.summary.txt
+110381-depth.mosdepth.summary.txt:NODE_22650_length_91_cov_4.285714	91	425	4.67	2	6
+120092-depth.mosdepth.summary.txt:NODE_22650_length_91_cov_4.285714	91	60	0.66	0	1
+121922-depth.mosdepth.summary.txt:NODE_22650_length_91_cov_4.285714	91	80	0.88	0	1
+401261-depth.mosdepth.summary.txt:NODE_22650_length_91_cov_4.285714	91	83	0.91	0	1
+
+Only in four samples
+
+Many of these are low coverage 
+
+(base) maccamp@farm:~/longfin-histories/data/110381-flash$  cat 402282-depth.mosdepth.summary.txt | awk '$4<1 {print}' | sort -k 4 -n
+NODE_17322_length_440_cov_2.506887	440	30	0.07	0	1
+NODE_18849_length_399_cov_2.276398	399	26	0.07	0	1
+NODE_19427_length_385_cov_2.262987	385	38	0.10	0	1
+
+
+(base) maccamp@farm:~/longfin-histories/data/110381-flash$ samtools idxstats 110381-realign.sort.bam | awk '$3<1 {print}' | wc
+    122     488    5065
+ samtools idxstats 120092-realign.sort.bam | awk '$3<1 {print}' | wc
+    326    1304   13835
+
+(base) maccamp@farm:~/longfin-histories/data/110381-flash$ samtools idxstats 400281-realign.sort.bam | awk '$3<1 {print}' | wc
+    323    1292   13691
+    
+(base) maccamp@farm:~/longfin-histories/data/110381-flash$ samtools idxstats 401261-realign.sort.bam | awk '$3<1 {print}' | wc
+    302    1208   12800
+    
+(base) maccamp@farm:~/longfin-histories/data/110381-flash$ samtools idxstats 402282-realign.sort.bam | awk '$3<1 {print}'  | wc
+    295    1180   12495
+    
+Probably should combine 5 males and run spades again.
+
+(base) maccamp@farm:~/longfin-histories/data/110381-flash$ grep NODE_6425_length_1008_cov_4.299678 *mosdepth.summary.txt
+110381-depth.mosdepth.summary.txt:NODE_6425_length_1008_cov_4.299678	1008	7321	7.26	1	16
+401261-depth.mosdepth.summary.txt:NODE_6425_length_1008_cov_4.299678	1008	3774	3.74	0	8
+
+Shows up only in these two seqs. 
