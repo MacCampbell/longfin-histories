@@ -261,7 +261,7 @@ topc %>% ungroup() %>% mutate(Command=paste0("samtools view -b -f 12 /home/macca
                               "/home/maccamp/longfin-histories/data/unmapped/",Sample,".bam; samtools collate -u -O /home/maccamp/longfin-histories/data/unmapped/",Sample,".bam | samtools fastq -1 /home/maccamp/longfin-histories/data/unmapped/",Sample,"-r1.fastq -2 /home/maccamp/longfin-histories/data/unmapped/",Sample,"-r2.fastq")) %>%
   select(Command) %>% write_tsv("212.1-unmapped-commands.tsv", col_names = FALSE)
 
-topc %>% ungroup() %>% mutate(Command=paste0("flash data/unmapped/",Sample,"-r1.fastq  data/unmapped/",Sample,"-r2.fastq -o /data/unmapped",Sample,"-flash --max-overlap 120 --min-overlap 20"))  %>%
+topc %>% ungroup() %>% mutate(Command=paste0("flash data/unmapped/",Sample,"-r1.fastq  data/unmapped/",Sample,"-r2.fastq -o data/unmapped",Sample,"-flash --max-overlap 120 --min-overlap 20"))  %>%
   select(Command) %>% write_tsv("212.2-flash.tsv", col_names = FALSE)
 
                               
@@ -302,18 +302,17 @@ samtools collate -u -O 110381.bam | samtools fastq -1 110381-r1.fastq -2 110381-
 check for read through?
 
 
-Let's repeat for our candidate fish:
+Let's repeat for all our fish, and use these candidate ones
 600232, 901522, 901232, 120092
 400281, 401261, 500131, 701331
 
 
-in data/unmapped
 
 ```{sh, eval=FALSE}
-#males
-
-
+#on farm in ~/longfin-histories
+bash 212.2-flash.tsv
 ```
+
 _3_ De novo asssemble unaligned male data, SPADES
 
 erro   1:16:02.922  3668M / 5153M ERROR   General                 (hammer_tools.cpp          : 194)   Pair of read files "/home/maccamp/longfin-histories>
@@ -322,21 +321,30 @@ when back and redid with -f 12
 [M::bam2fq_mainloop] discarded 0 singletons
 [M::bam2fq_mainloop] processed 1889938 reads
 
-Can cat together several individual fastq files then run something like this:
-
-conda activate spades
-```{r, eval=FALSE}
-#trialing indonesian sample
-ind %>% filter(Lineage=="uwisara") %>% mutate(Command=paste0("srun -p bigmemm -t 168:00:00 --mem=520GB --nodes=1 --cpus-per-task=6 spades.py --phred-offset 33 -1 data/uwisara/",Run,"-R1.fastq.gz -2 data/uwisara/",Run,"-R2.fastq.gz -o data/denovo/",Run," > data/denovo/",Run,".out 2> data/denovo/",Run,".err &")) %>% select(Command) %>%
-  write_tsv("1301.2-spades.txt")
-```
+Can cat together several individual fastq files 
+600232, 901522, 901232, 120092
 
 
+then run something like this:
 ```{sh, eval=FALSE}
 srun -p bigmemm -t 48:00:00 --mem=256GB --nodes=1 --cpus-per-task=6 spades.py --phred-offset 33 -1 data/unmapped/110381-r1.fastq -2 data/unmapped/110381-r2.fastq -o data/unmapped/110381 > data/unmapped/110381.out 2> data/unmapped/110381.err & 
 
 #Spades with unpaired
 srun -p bigmemm -t 48:00:00 --mem=256GB --nodes=1 --cpus-per-task=6 spades.py --phred-offset 33 -1 data/unmapped/110381-flash.notCombined_1.fastq -2 data/unmapped/110381-flash.notCombined_2.fastq --merged data/unmapped/110381-flash.extendedFrags.fastq -o data/unmapped/110381-flash > data/unmapped/110381-flash.out 2> data/unmapped/110381-flash.err & 
+````
+
+
+combine, then:
+
+```{r}
+cat 600232-flash.notCombined_1.fastq 901522-flash.notCombined_1.fastq 901232-flash.notCombined_1.fastq 120092-flash.notCombined_1.fastq > male-r1.fastq
+cat 600232-flash.notCombined_2.fastq 901522-flash.notCombined_2.fastq 901232-flash.notCombined_2.fastq 120092-flash.notCombined_2.fastq > male-r2.fastq
+cat 600232-flash.extendedFrags.fastq 901522-flash.extendedFrags.fastq 901232-flash.extendedFrags.fastq 120092-flash.extendedFrags.fastq > male-extended.fastq
+```
+
+```{sh, eval=FALSE}
+#Spades with unpaired
+srun -p bigmemm -t 48:00:00 --mem=256GB --nodes=1 --cpus-per-task=6 spades.py --phred-offset 33 -1 data/unmapped/male-r1.fastq -2 data/unmapped/male-r2.fastq --merged data/unmapped/male-extended.fastq -o data/unmapped/male-flash > data/unmapped/male-flash.out 2> data/unmapped/male-flash.err & 
 ````
 
 
