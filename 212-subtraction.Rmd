@@ -10,6 +10,8 @@ knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 
 ```{r}
 library(tidyverse)
+library(pheatmap)
+library(ggplotify)
 ```
 
 
@@ -91,7 +93,7 @@ samtools flagstat 110381.sort.bam 83330826 + 0 mapped (97.15% : N/A)
 Then we can rerun our sex gwas
 'first two digits is a generation number, the three in the middle is a cross number, and the last number is for male/ female (1 or 2)."
 ```{r}
-m80<-fish %>% select(-Path, -Link) %>% mutate(Pheno=Sex-1) %>% mutate(SexChar=ifelse(Sex==2, "Female","Male")) %>% mutate(Path=paste0("/home/maccamp/longfin-histories/data/sub/",Sample,".sort.flt.bam"))
+m80<-fish %>% select(-Path, -Link) %>% mutate(Pheno=Sex-1) %>% mutate(SexChar=ifelse(Sex==2, "Male","Female")) %>% mutate(Path=paste0("/home/maccamp/longfin-histories/data/sub/",Sample,".sort.flt.bam"))
 m80 %>% select(Pheno) %>% write_tsv("bamlists/80.pheno", col_names = FALSE)
 m80 %>% select(Path) %>% write_tsv("bamlists/80.bamlist", col_names = FALSE)
 
@@ -157,8 +159,95 @@ ggplot(sub) +
 sub %>% select(Chromosome, Position) %>% write_tsv("meta/212-sites.tsv", col_names = FALSE)
 ```
 
+```{sh, eval=FALSE}
+srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 72 -bam $HOME/longfin-histories/bamlists/80.bamlist -ref /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta  \
+-r SUPER_10:16000000- -sites outputs/212/212-sites.tsv -out outputs/212/snps \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/212/snps.out 2> outputs/212/snps.err &
+
+#57 sites called
+
+srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 60 -bam $HOME/longfin-histories/bamlists/80.bamlist -ref /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta  \
+-r SUPER_10:16000000- -sites outputs/212/212-sites.tsv -out outputs/212/snps-relaxed \
+-minMaf 0.05 -minMapQ 10 -minQ 10 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-5 -doGlf	2 \
+-doGeno 2 -doPost 1 -postCutoff 0.80 -doPlink 2  > outputs/212/snps-relaxed.out 2> outputs/212/snps-relaxed.err &
+
+#	-> Number of sites retained after filtering: 66  (not including top3 sites)
+#	-> Number of sites retained after filtering: 75  (when -postCutoff 80)
+
+
+```
+
+Top 3 sites
+SUPER_10   16495263
+SUPER_10   17774598
+SUPER_10   16577582
+-doGlf	2
+
+```{r}
+meta<-fish
+ddf<-read_tsv("outputs/212/snps.geno.gz", col_names = c("FALSE")) %>% select(-X83)
+#replace with most commmon entry?
+#replace with NA for now
+ddf[ddf==-1]<-NA
+ddf2<-ddf
+#ddf2<-ddf %>% filter(X2 %in% head(sub$Position,30))
+m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
+
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Sex<-meta$Sex
+annot$Sex<-gsub("1","Female",annot$Sex)
+annot$Sex<-gsub("2","Male",annot$Sex)
+```
+
+```{r}
+
+as.ggplot(pheatmap(m, labels_col = meta$Sample, cluster_rows=TRUE, annotation_col = annot, width=12, height=8, cluster_cols = FALSE, legend=TRUE,
+                   labels_row = ddf$X2,
+         fontsize_col = 6)) + ggtitle("Delta Smelt Variants on Delta Smelt SUPER_10") +
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/212/dsm-sex-dsm-reference-heatmap-subset.pdf", width=12, height=8)
+```
+
 _1_ Identify the highest coverage 10 females and 10 males (and omit ones Mac finds suspicious)
 These may be ones that don't track with markers id'd by gwas
+
+Which ones are these?
+
+Unlikely females
+
+901071
+701931
+902671
+
+Unlikely males
+121922
+401432
+402282
+500742
+602392
+300662
+302002
+400282
+402592
+501802
+600902
+600872
+600772
+602992
+701932
+701782
+110382
+
+Is there low coverage and a bias towards homozygosity here??
+
+
+
+
+
 _2_ Extract unaligned sequences from males/females
 
 (can try chrom by chrom pc)
@@ -171,7 +260,31 @@ using the sort.bam files
 topc %>% ungroup() %>% mutate(Command=paste0("samtools view -b -f 12 /home/maccamp/longfin-histories/data/sub/",Sample,".sort.bam > ",
                               "/home/maccamp/longfin-histories/data/unmapped/",Sample,".bam; samtools collate -u -O /home/maccamp/longfin-histories/data/unmapped/",Sample,".bam | samtools fastq -1 /home/maccamp/longfin-histories/data/unmapped/",Sample,"-r1.fastq -2 /home/maccamp/longfin-histories/data/unmapped/",Sample,"-r2.fastq")) %>%
   select(Command) %>% write_tsv("212.1-unmapped-commands.tsv", col_names = FALSE)
+
+topc %>% ungroup() %>% mutate(Command=paste0("flash data/unmapped/",Sample,"-r1.fastq  data/unmapped/",Sample,"-r2.fastq -o /data/unmapped",Sample,"-flash --max-overlap 120 --min-overlap 20"))  %>%
+  select(Command) %>% write_tsv("212.2-flash.tsv", col_names = FALSE)
+
+                              
 ```
+
+
+Let's identify from topc some candidate males.
+-> not 121922, 402282, 300662
+
+Candidate males
+600232, 901522, 901232, 120092
+
+less good candidate
+601512, 700232
+
+Let's identify from topc some candidate females
+-not 701931
+
+Candidate females
+400281, 401261, 500131, 701331, 700901, 801931, 802601
+
+less good candidate
+402281
 
 module load parallel
 srun -p high --time 4:00:00 --nodes=1 --ntasks-per-node=1 --cpus-per-task=11 parallel -j 11 < 212.1-unmapped-commands.tsv
@@ -187,8 +300,20 @@ samtools flagstat 110381.bam (with -f 12)
 samtools collate -u -O 110381.bam | samtools fastq -1 110381-r1.fastq -2 110381-r2.fastq
 
 check for read through?
-flash 110381-r1.fastq 110381-r2.fastq -o 110381-flash --max-overlap 120  --min-overlap 20
 
+
+Let's repeat for our candidate fish:
+600232, 901522, 901232, 120092
+400281, 401261, 500131, 701331
+
+
+in data/unmapped
+
+```{sh, eval=FALSE}
+#males
+
+
+```
 _3_ De novo asssemble unaligned male data, SPADES
 
 erro   1:16:02.922  3668M / 5153M ERROR   General                 (hammer_tools.cpp          : 194)   Pair of read files "/home/maccamp/longfin-histories>
