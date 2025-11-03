@@ -96,6 +96,10 @@ Then we can rerun our sex gwas
 m80<-fish %>% select(-Path, -Link) %>% mutate(Pheno=Sex-1) %>% mutate(SexChar=ifelse(Sex==2, "Male","Female")) %>% mutate(Path=paste0("/home/maccamp/longfin-histories/data/sub/",Sample,".sort.flt.bam"))
 m80 %>% select(Pheno) %>% write_tsv("bamlists/80.pheno", col_names = FALSE)
 m80 %>% select(Path) %>% write_tsv("bamlists/80.bamlist", col_names = FALSE)
+m80 %>% select(Sample) %>% write_tsv("bamlists/80.names", col_names=FALSE)
+m80 %>% filter(SexChar=="Female") %>% select(Sample) %>% write_tsv("bamlists/80-females.names", col_names=FALSE)
+m80 %>% filter(SexChar=="Male") %>% select(Sample) %>% write_tsv("bamlists/80-males.names", col_names=FALSE)
+
 
 #bind on data
 dat<- read_csv("outputs/212/curated.dat", col_names = c("Sample","Sort","Dedup","Cov"))
@@ -166,7 +170,7 @@ sub %>% select(Chromosome, Position) %>% write_tsv("meta/212-sites.tsv", col_nam
 sub2<-df %>% arrange(-LRT) %>% filter(Chromosome=="SUPER_10") %>% head(n=250) %>% arrange(Position)
 ggplot(sub2) +
   geom_point(aes(x=Position, y=log10p))
-sub %>% select(Chromosome, Position) %>% write_tsv("meta/212-sites2.tsv", col_names = FALSE)
+sub2 %>% select(Chromosome, Position) %>% write_tsv("meta/212-sites2.tsv", col_names = FALSE)
 
 ```
 
@@ -189,9 +193,9 @@ srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=
 #	-> Number of sites retained after filtering: 75  (when -postCutoff 80)
 
 #sites2 
-srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+srun -t 2:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
 -minInd 72 -bam $HOME/longfin-histories/bamlists/80.bamlist -ref /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta  \
--r SUPER_10:16000000- -sites outputs/212/212-sites2.tsv -out outputs/212/snps2 \
+-r SUPER_10:14000000- -sites outputs/212/212-sites2.tsv -out outputs/212/snps2 \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/212/snps2.out 2> outputs/212/snps2.err &
 
@@ -222,13 +226,33 @@ annot$Sex<-gsub("2","Male",annot$Sex)
 
 ```{r}
 
-as.ggplot(pheatmap(m, labels_col = meta$Sample, cluster_rows=TRUE, annotation_col = annot, width=12, height=8, cluster_cols = FALSE, legend=TRUE,
+as.ggplot(pheatmap(m, labels_col = meta$Sample, cluster_rows=FALSE, annotation_col = annot, width=12, height=8, cluster_cols = FALSE, legend=TRUE,
                    labels_row = ddf$X2,
          fontsize_col = 6)) + ggtitle("Delta Smelt Variants on Delta Smelt SUPER_10") +
   theme(plot.title = element_text(hjust=0.5))
 ggsave("outputs/212/dsm-sex-dsm-reference-heatmap-subset.pdf", width=12, height=8)
 ```
 
+Can I calculater an AF difference of
+0.0 - 0.5 = 0.5?
+
+
+plink --tped snps2.tped --tfam snps2.tfam  --out plink-binary --recode --allow-extra-chr --noweb
+plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-chr -out plink
+bgzip plink.vcf 
+tabix plink.vcf.gz
+bcftools reheader --samples meta/544.names outputs/108/plink.vcf.gz | bcftools +fill-tags -- -t MAF
+
+
+#renaming vcf with sample names, filtering again on MAF, and then pruning, selecting random SNP
+
+module load bcftools/1.13
+
+#Basically, pruning before was like this: bcftools +prune -l 0.20 -w 10000
+
+
+
+Could split into separate VCFs then calculater freqs with bcftools and remerge (but watch for changing reference allele)
 _1_ Identify the highest coverage 10 females and 10 males (and omit ones Mac finds suspicious)
 These may be ones that don't track with markers id'd by gwas
 
