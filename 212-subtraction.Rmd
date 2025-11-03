@@ -147,9 +147,14 @@ df %>% arrange(-LRT) %>% head(n=20)
 
 
 ```{r}
-ggplot(df %>% filter(Chromosome %in% c("SUPER_1","SUPER_10"))) +
+ggplot(df %>% filter(Chromosome %in% c("SUPER_1","SUPER_10","SUPER_11"))) +
   geom_point(aes(x=Position, y=log10p)) +
-  facet_wrap(.~Chromosome)
+  facet_wrap(.~Chromosome, scales="free_x") +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  ylab("-log10 (p-value)\n") +
+  xlab("\n Position") 
+ggsave("outputs/212/sex-gwas-curated-genome.jpeg")
 ```
 
 ```{r}
@@ -157,6 +162,12 @@ sub<-df %>% arrange(-LRT) %>% filter(Chromosome=="SUPER_10") %>% head(n=80) %>% 
 ggplot(sub) +
   geom_point(aes(x=Position, y=log10p))
 sub %>% select(Chromosome, Position) %>% write_tsv("meta/212-sites.tsv", col_names = FALSE)
+
+sub2<-df %>% arrange(-LRT) %>% filter(Chromosome=="SUPER_10") %>% head(n=250) %>% arrange(Position)
+ggplot(sub2) +
+  geom_point(aes(x=Position, y=log10p))
+sub %>% select(Chromosome, Position) %>% write_tsv("meta/212-sites2.tsv", col_names = FALSE)
+
 ```
 
 ```{sh, eval=FALSE}
@@ -177,6 +188,12 @@ srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=
 #	-> Number of sites retained after filtering: 66  (not including top3 sites)
 #	-> Number of sites retained after filtering: 75  (when -postCutoff 80)
 
+#sites2 
+srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 72 -bam $HOME/longfin-histories/bamlists/80.bamlist -ref /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta  \
+-r SUPER_10:16000000- -sites outputs/212/212-sites2.tsv -out outputs/212/snps2 \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/212/snps2.out 2> outputs/212/snps2.err &
 
 ```
 
@@ -261,7 +278,7 @@ topc %>% ungroup() %>% mutate(Command=paste0("samtools view -b -f 12 /home/macca
                               "/home/maccamp/longfin-histories/data/unmapped/",Sample,".bam; samtools collate -u -O /home/maccamp/longfin-histories/data/unmapped/",Sample,".bam | samtools fastq -1 /home/maccamp/longfin-histories/data/unmapped/",Sample,"-r1.fastq -2 /home/maccamp/longfin-histories/data/unmapped/",Sample,"-r2.fastq")) %>%
   select(Command) %>% write_tsv("212.1-unmapped-commands.tsv", col_names = FALSE)
 
-topc %>% ungroup() %>% mutate(Command=paste0("flash data/unmapped/",Sample,"-r1.fastq  data/unmapped/",Sample,"-r2.fastq -o data/unmapped",Sample,"-flash --max-overlap 120 --min-overlap 20"))  %>%
+topc %>% ungroup() %>% mutate(Command=paste0("flash data/unmapped/",Sample,"-r1.fastq  data/unmapped/",Sample,"-r2.fastq -o data/unmapped/",Sample,"-flash --max-overlap 120 --min-overlap 20"))  %>%
   select(Command) %>% write_tsv("212.2-flash.tsv", col_names = FALSE)
 
                               
@@ -334,9 +351,9 @@ srun -p bigmemm -t 48:00:00 --mem=256GB --nodes=1 --cpus-per-task=6 spades.py --
 ````
 
 
-combine, then:
+combine, then assemble our candidate males
 
-```{r}
+```{sh, eval=FALSE}
 cat 600232-flash.notCombined_1.fastq 901522-flash.notCombined_1.fastq 901232-flash.notCombined_1.fastq 120092-flash.notCombined_1.fastq > male-r1.fastq
 cat 600232-flash.notCombined_2.fastq 901522-flash.notCombined_2.fastq 901232-flash.notCombined_2.fastq 120092-flash.notCombined_2.fastq > male-r2.fastq
 cat 600232-flash.extendedFrags.fastq 901522-flash.extendedFrags.fastq 901232-flash.extendedFrags.fastq 120092-flash.extendedFrags.fastq > male-extended.fastq
@@ -344,6 +361,7 @@ cat 600232-flash.extendedFrags.fastq 901522-flash.extendedFrags.fastq 901232-fla
 
 ```{sh, eval=FALSE}
 #Spades with unpaired
+conda activate spades
 srun -p bigmemm -t 48:00:00 --mem=256GB --nodes=1 --cpus-per-task=6 spades.py --phred-offset 33 -1 data/unmapped/male-r1.fastq -2 data/unmapped/male-r2.fastq --merged data/unmapped/male-extended.fastq -o data/unmapped/male-flash > data/unmapped/male-flash.out 2> data/unmapped/male-flash.err & 
 ````
 
@@ -367,11 +385,23 @@ For multiple fish, should I specify different libraries, or cat together reads?
 
 I like the plan of assembly of 2 x 5 different males and 2 x 5 females and checking for concordance.
 
+I assembled four candidate males using flashed reads and spades as one assembly.
+
+
+
 aligning to/110381-flash scaffolds in data/110381-flash, indexing with bwa...
 aligning to/110381 scaffolds in data/110381, indexing with bwa...
 
 bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/data/110381-flash/scaffolds.fasta
 bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/data/110381/scaffolds.fasta
+
+
+making a directory to do this again
+male-flash/scaffolds.fasta, linking over all our fish
+
+
+
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/data/male-flash/scaffolds.fasta
 
 
 
@@ -385,85 +415,25 @@ indicates bins of: 0:1, 1:4, 4:100, 100:200, 200:infinity where the upper endpoi
 0:0:1:
 --quantize 0:0:1:4:100:200 
 
+
+These are our candidate fish though
+600232, 901522, 901232, 120092
+400281, 401261, 500131, 701331
+
 ```{sh, eval=FALSE}
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 110381-depth 110381-realign.sort.bam
+#males
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 600232-depth 600232-realign.sort.bam
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 901522-depth 901522-realign.sort.bam
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 901232-depth 901232-realign.sort.bam
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 120092-depth 120092-realign.sort.bam
+
+#females
 srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 400281-depth 400281-realign.sort.bam
 srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 401261-depth 401261-realign.sort.bam
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 402281-depth 402281-realign.sort.bam
-
-
-
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 121922-depth 121922-realign.sort.bam
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 120092-depth 120092-realign.sort.bam
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 300662-depth 300662-realign.sort.bam
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 402282-depth 402282-realign.sort.bam
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 500131-depth 500131-realign.sort.bam
+srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 701331-depth 701331-realign.sort.bam
 
 
 ```
-300662
-(base) maccamp@farm:~/longfin-histories/data/110381-flash$ grep NODE_15287_length_500_cov_5.371158 110381-depth.mosdepth.summary.txt 
-NODE_15287_length_500_cov_5.371158	500	3989	7.98	1	13
-(base) maccamp@farm:~/longfin-histories/data/110381-flash$ grep NODE_15287_length_500_cov_5.371158 121922-depth.mosdepth.summary.txt 
-NODE_15287_length_500_cov_5.371158	500	293	0.59	0	1
-
- cat 121922-depth.mosdepth.summary.txt | awk '$4<1 {print}'
- cat 120092-depth.mosdepth.summary.txt | awk '$4<1 {print}'
- cat 402282-depth.mosdepth.summary.txt | awk '$4<1 {print}'
-grep NODE_15287_length_500_cov_5.371158 *depth.mosdepth.summary.txt 
-
-110381-depth.mosdepth.summary.txt:NODE_15287_length_500_cov_5.371158	500	3989	7.98	1	13
-120092-depth.mosdepth.summary.txt:NODE_15287_length_500_cov_5.371158	500	1311	2.62	0	6
-121922-depth.mosdepth.summary.txt:NODE_15287_length_500_cov_5.371158	500	293	0.59	0	1
-400281-depth.mosdepth.summary.txt:NODE_15287_length_500_cov_5.371158	500	3658	7.32	0	14
-
-grep NODE_22671_length_90_cov_21.461538	*depth.mosdepth.summary.txt 
-
-(base) maccamp@farm:~/longfin-histories/data/110381-flash$ grep NODE_10791_length_691_cov_2.491857 *depth.mosdepth.summary.txt
-110381-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	2867	4.15	1	7
-120092-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	4865	7.04	0	15
-121922-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	238	0.34	0	1
-300662-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	1987	2.88	0	6
-400281-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	4151	6.01	0	12
-401261-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	4154	6.01	0	12
-402281-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	3925	5.68	0	11
-402282-depth.mosdepth.summary.txt:NODE_10791_length_691_cov_2.491857	691	4962	7.18	0	17
 
 
-grep NODE_22650_length_91_cov_4.2857  *depth.mosdepth.summary.txt
-(base) maccamp@farm:~/longfin-histories/data/110381-flash$ grep NODE_22650_length_91_cov_4.2857  *depth.mosdepth.summary.txt
-110381-depth.mosdepth.summary.txt:NODE_22650_length_91_cov_4.285714	91	425	4.67	2	6
-120092-depth.mosdepth.summary.txt:NODE_22650_length_91_cov_4.285714	91	60	0.66	0	1
-121922-depth.mosdepth.summary.txt:NODE_22650_length_91_cov_4.285714	91	80	0.88	0	1
-401261-depth.mosdepth.summary.txt:NODE_22650_length_91_cov_4.285714	91	83	0.91	0	1
-
-Only in four samples
-
-Many of these are low coverage 
-
-(base) maccamp@farm:~/longfin-histories/data/110381-flash$  cat 402282-depth.mosdepth.summary.txt | awk '$4<1 {print}' | sort -k 4 -n
-NODE_17322_length_440_cov_2.506887	440	30	0.07	0	1
-NODE_18849_length_399_cov_2.276398	399	26	0.07	0	1
-NODE_19427_length_385_cov_2.262987	385	38	0.10	0	1
-
-
-(base) maccamp@farm:~/longfin-histories/data/110381-flash$ samtools idxstats 110381-realign.sort.bam | awk '$3<1 {print}' | wc
-    122     488    5065
- samtools idxstats 120092-realign.sort.bam | awk '$3<1 {print}' | wc
-    326    1304   13835
-
-(base) maccamp@farm:~/longfin-histories/data/110381-flash$ samtools idxstats 400281-realign.sort.bam | awk '$3<1 {print}' | wc
-    323    1292   13691
-    
-(base) maccamp@farm:~/longfin-histories/data/110381-flash$ samtools idxstats 401261-realign.sort.bam | awk '$3<1 {print}' | wc
-    302    1208   12800
-    
-(base) maccamp@farm:~/longfin-histories/data/110381-flash$ samtools idxstats 402282-realign.sort.bam | awk '$3<1 {print}'  | wc
-    295    1180   12495
-    
-Probably should combine 5 males and run spades again.
-
-(base) maccamp@farm:~/longfin-histories/data/110381-flash$ grep NODE_6425_length_1008_cov_4.299678 *mosdepth.summary.txt
-110381-depth.mosdepth.summary.txt:NODE_6425_length_1008_cov_4.299678	1008	7321	7.26	1	16
-401261-depth.mosdepth.summary.txt:NODE_6425_length_1008_cov_4.299678	1008	3774	3.74	0	8
-
-Shows up only in these two seqs. 
