@@ -106,7 +106,7 @@ dat<- read_csv("outputs/212/curated.dat", col_names = c("Sample","Sort","Dedup",
 dat$Sample<-as.character(dat$Sample)
 nm<-left_join(m80,dat)
 topc<-nm %>% group_by(SexChar) %>% top_n(10, Cov)
-
+write_csv(nm, file="meta/nm.csv")
 ```
 
 no -rf -rf meta/lates-lgs.txt
@@ -125,7 +125,7 @@ srun -t 72:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task
 ```
 
 ```{r}
-files = list.files(path="outputs/212/", pattern="*.lrt0.gz", full.names = TRUE)
+files = list.files(path="outputs/212/", pattern="*75.lrt0.gz", full.names = TRUE)
 list = lapply(files, read_tsv)
 data<-bind_rows(list)
 ```
@@ -148,9 +148,12 @@ df %>% arrange(-LRT) %>% head(n=20)
 	-> Number of sites retained after filtering: 1242834 
 95%
 	-> Number of sites retained after filtering: 1136385 
-
+```{r}
+df %>% filter(Chromosome!="SUPER_10") %>% arrange(-LRT) %>% head(n=20)
+```
 
 ```{r}
+#c("SUPER_1","SUPER_10","SUPER_11","Scaffold_120","SUPER_3","Scaffold_129","SUPER_8")
 ggplot(df %>% filter(Chromosome %in% c("SUPER_1","SUPER_10","SUPER_11"))) +
   geom_point(aes(x=Position, y=log10p)) +
   facet_wrap(.~Chromosome, scales="free_x") +
@@ -192,12 +195,30 @@ srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=
 #	-> Number of sites retained after filtering: 66  (not including top3 sites)
 #	-> Number of sites retained after filtering: 75  (when -postCutoff 80)
 
-#sites2 
+#sites2 called across  all sites at the end of the chrom
 srun -t 2:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
 -minInd 72 -bam $HOME/longfin-histories/bamlists/80.bamlist -ref /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta  \
--r SUPER_10:14000000- -sites outputs/212/212-sites2.tsv -out outputs/212/snps2 \
--minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-r SUPER_10:15000000- -out outputs/212/snps2 \
+-minMaf 0.10 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/212/snps2.out 2> outputs/212/snps2.err &
+
+#scaffold_120
+srun -t 2:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 60 -bam $HOME/longfin-histories/bamlists/80.bamlist -ref /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta  \
+-r Scaffold_120 -out outputs/212/scaffold_120 -doGlf	2 \
+-minMaf 0.10 -minMapQ 10 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-5 \
+-doGeno 2 -doPost 1 -postCutoff 0.8 -doPlink 2  > outputs/212/snps120.out 2> outputs/212/snps120.err &
+
+#	-> Number of sites retained after filtering: 11 
+#	-> Number of sites retained after filtering: 59 with relaxed version
+
+#sites called across  all sites 
+
+srun -t 48:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 72 -bam $HOME/longfin-histories/bamlists/80.bamlist -ref /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta  \
+-out outputs/212/snps-all \
+-minMaf 0.10 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/212/snps-all.out 2> outputs/212/snps-all.err &
 
 ```
 
@@ -222,16 +243,25 @@ annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("samp
 annot$Sex<-meta$Sex
 annot$Sex<-gsub("1","Female",annot$Sex)
 annot$Sex<-gsub("2","Male",annot$Sex)
+annot$Coverage<-nm$Cov
 ```
 
 ```{r}
 
-as.ggplot(pheatmap(m, labels_col = meta$Sample, cluster_rows=FALSE, annotation_col = annot, width=12, height=8, cluster_cols = FALSE, legend=TRUE,
+as.ggplot(pheatmap(m, labels_col = meta$Sample, cluster_rows=TRUE, annotation_col = annot, width=12, height=8, cluster_cols = FALSE, legend=TRUE,
                    labels_row = ddf$X2,
          fontsize_col = 6)) + ggtitle("Delta Smelt Variants on Delta Smelt SUPER_10") +
   theme(plot.title = element_text(hjust=0.5))
 ggsave("outputs/212/dsm-sex-dsm-reference-heatmap-subset.pdf", width=12, height=8)
 ```
+
+topc?
+
+
+
+(base) maccamp@farm:~/longfin-histories/outputs/212$ grep 161873 scaffold_120.tped 
+Scaffold_120 Scaffold_120_161873 0 161873	T T	0 0	T T	T A	T T	T T	T T	T T	T T	0 0	0 0	0 0	0 0	T T	T T	T T	T T	T A	T T	T T	T A	T T	T T	0 0	T T	T A	T T	T T	T T	T T	T T	T T	T T	T T	T A	T T	0 0	T T	T T	0 0	0 0	T A	T T	T A	T A	T A	A A	T T	T T	T T	T T	0 0	T A	T A	T A	0 0	T A	0 0	T T	T A	T T	T T	0 0	A A	0 0	A A	A A	T A	0 0	T T	0 0	T A	0 0	T A	T A	A A	0 0	T T	T A	0 0
+
 
 Can I calculater an AF difference of
 0.0 - 0.5 = 0.5?
@@ -241,7 +271,9 @@ plink --tped snps2.tped --tfam snps2.tfam  --out plink-binary --recode --allow-e
 plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-chr -out plink
 bgzip plink.vcf 
 tabix plink.vcf.gz
-bcftools reheader --samples meta/544.names outputs/108/plink.vcf.gz | bcftools +fill-tags -- -t MAF
+bcftools reheader --samples meta/80.names outputs/212/plink.vcf.gz | bcftools +fill-tags -- -t MAF > outputs/212/renamed.vcf
+bcftools view -s bamlists/80-females.names outputs/212/renamed.vcf | bcftools +fill-tags -- -t MAF > outputs/212/female.vcf
+bcftools view -s bamlists/80-males.names outputs/212/renamed.vcf | bcftools +fill-tags -- -t MAF > outputs/212/male.vcf
 
 
 #renaming vcf with sample names, filtering again on MAF, and then pruning, selecting random SNP
@@ -421,6 +453,22 @@ bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/data/1
 
 
 making a directory to do this again
+
+(base) maccamp@farm:~/longfin-histories/data/unmapped/male-flash$ assembledSeqStats.pl scaffolds.fasta 
+Number of Contigs	21833
+Total Bases	24825170
+No. of Contigs >=1000	8529
+Total Bases in Contigs >=1000	18312734
+Mean Contig Length	1137.04804653506
+Max Contig Length	16247
+N50	1768
+Number of Contigs in N50	4102
+GC content	50.0237908471414
+Proportion of Ns	0.00171318061467454
+
+(base) maccamp@farm:~/longfin-histories/data/male-flash$ ln -s ../unmapped/male-flash/scaffolds.fasta .
+(base) maccamp@farm:~/longfin-histories/data/male-flash$ bwa index scaffolds.fasta 
+
 male-flash/scaffolds.fasta, linking over all our fish
 
 
@@ -446,18 +494,128 @@ These are our candidate fish though
 
 ```{sh, eval=FALSE}
 #males
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 600232-depth 600232-realign.sort.bam
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 901522-depth 901522-realign.sort.bam
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 901232-depth 901232-realign.sort.bam
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 120092-depth 120092-realign.sort.bam
+srun -p bigmemm --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -Q 10 -n 600232-depth 600232-realign.sort.flt.bam
+srun -p bigmemm --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -Q 10 -n 901522-depth 901522-realign.sort.flt.bam
+srun -p bigmemm --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -Q 10 -n 901232-depth 901232-realign.sort.flt.bam
+srun -p bigmemm --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -Q 10 -n 120092-depth 120092-realign.sort.flt.bam
 
 #females
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 400281-depth 400281-realign.sort.bam
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 401261-depth 401261-realign.sort.bam
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 500131-depth 500131-realign.sort.bam
-srun -p high --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -n 701331-depth 701331-realign.sort.bam
+srun -p bigmemm --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -Q 10 -n 400281-depth 400281-realign.sort.flt.bam
+srun -p bigmemm --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -Q 10 -n 401261-depth 401261-realign.sort.flt.bam
+srun -p bigmemm --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -Q 10 -n 500131-depth 500131-realign.sort.flt.bam
+srun -p bigmemm --time=1:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=2 mosdepth -Q 10 -n 701331-depth 701331-realign.sort.flt.bam
 
 
 ```
 
+cat 400281-depth.mosdepth.summary.txt | awk ' $4 < 1 '
+(base) maccamp@farm:~/longfin-histories/data/male-flash$ cat 400281-depth.mosdepth.summary.txt | awk ' $4 < .1 ' | sort -k 4 -n | head -n 20
+NODE_13760_length_566_cov_2.611452      566     20      0.04    0       1
+NODE_18033_length_373_cov_4.320946      373     19      0.05    0       1
+NODE_15222_length_488_cov_3.652068      488     31      0.06    0       1
+NODE_533_length_4345_cov_4.599813       4345    300     0.07    0       1
+NODE_15178_length_490_cov_3.508475      490     39      0.08    0       1
+NODE_15266_length_486_cov_2.122249      486     37      0.08    0       1
+NODE_16673_length_424_cov_4.377522      424     33      0.08    0       1
+NODE_16849_length_417_cov_3.132353      417     32      0.08    0       1
+NODE_16869_length_416_cov_4.265487      416     32      0.08    0       1
+NODE_17758_length_383_cov_3.470588      383     33      0.09    0       1
+NODE_18278_length_364_cov_1.404181      364     32      0.09    0       1
+NODE_18329_length_362_cov_3.080702      362     36      0.10    0       1
+NODE_10813_length_780_cov_3.630156      780     94      0.12    0       2
+NODE_17111_length_406_cov_5.848024      406     48      0.12    0       1
+NODE_18081_length_371_cov_5.697279      371     54      0.15    0       1
+NODE_17797_length_382_cov_3.304918      382     63      0.16    0       1
+NODE_17964_length_376_cov_2.040134      376     62      0.16    0       2
+NODE_15985_length_453_cov_1.545213      453     83      0.18    0       2
+NODE_17042_length_409_cov_1.975904      409     73      0.18    0       1
+NODE_18424_length_359_cov_1.780142      359     68      0.19    0       1
 
+cat 401261-depth.mosdepth.summary.txt | awk ' $4 < 1 ' | sort -k 4 -n | head
+(base) maccamp@farm:~/longfin-histories/data/male-flash$ cat 401261-depth.mosdepth.summary.txt | awk ' $4 < 1 ' | sort -k 4 -n | head -n 20
+NODE_7698_length_1104_cov_3.323272      1104    21      0.02    0       1
+NODE_10905_length_773_cov_3.748563      773     31      0.04    0       1
+NODE_13520_length_580_cov_16.968191     580     36      0.06    0       1
+NODE_13710_length_569_cov_1.036585      569     35      0.06    0       1
+NODE_15178_length_490_cov_3.508475      490     32      0.07    0       1
+NODE_15244_length_487_cov_2.851220      487     34      0.07    0       1
+NODE_15247_length_487_cov_1.826829      487     35      0.07    0       1
+NODE_16489_length_432_cov_4.591549      432     30      0.07    0       1
+NODE_16869_length_416_cov_4.265487      416     32      0.08    0       1
+NODE_17480_length_392_cov_1.342857      392     30      0.08    0       1
+NODE_17508_length_391_cov_1.614650      391     30      0.08    0       1
+NODE_17964_length_376_cov_2.040134      376     31      0.08    0       1
+NODE_18039_length_373_cov_1.439189      373     30      0.08    0       1
+NODE_18113_length_370_cov_2.378840      370     30      0.08    0       1
+NODE_18161_length_368_cov_6.250859      368     30      0.08    0       1
+NODE_17355_length_397_cov_1.343750      397     38      0.10    0       1
+NODE_18131_length_369_cov_4.876712      369     37      0.10    0       1
+NODE_17976_length_375_cov_6.983221      375     42      0.11    0       1
+NODE_11370_length_733_cov_7.800305      733     89      0.12    0       1
+NODE_15034_length_497_cov_1.157143      497     60      0.12    0       1
+
+(base) maccamp@farm:~/longfin-histories/data/male-flash$ grep NODE_15178_length_490_cov_3.508475 *summary.txt
+120092-depth.mosdepth.summary.txt:NODE_15178_length_490_cov_3.508475    490     754     1.54    0       5
+400281-depth.mosdepth.summary.txt:NODE_15178_length_490_cov_3.508475    490     39      0.08    0       1
+401261-depth.mosdepth.summary.txt:NODE_15178_length_490_cov_3.508475    490     32      0.07    0       1
+500131-depth.mosdepth.summary.txt:NODE_15178_length_490_cov_3.508475    490     300     0.61    0       1
+600232-depth.mosdepth.summary.txt:NODE_15178_length_490_cov_3.508475    490     32      0.07    0       1
+701331-depth.mosdepth.summary.txt:NODE_15178_length_490_cov_3.508475    490     130     0.27    0       4
+901522-depth.mosdepth.summary.txt:NODE_15178_length_490_cov_3.508475    490     931     1.90    0       3
+
+(base) maccamp@farm:~/longfin-histories/data/male-flash$ grep NODE_17964_length_376_cov_2.040134 *summary.txt
+120092-depth.mosdepth.summary.txt:NODE_17964_length_376_cov_2.040134    376     169     0.45    0       1
+400281-depth.mosdepth.summary.txt:NODE_17964_length_376_cov_2.040134    376     62      0.16    0       2
+401261-depth.mosdepth.summary.txt:NODE_17964_length_376_cov_2.040134    376     31      0.08    0       1
+500131-depth.mosdepth.summary.txt:NODE_17964_length_376_cov_2.040134    376     244     0.65    0       2
+600232-depth.mosdepth.summary.txt:NODE_17964_length_376_cov_2.040134    376     637     1.69    0       8
+701331-depth.mosdepth.summary.txt:NODE_17964_length_376_cov_2.040134    376     612     1.63    0       7
+901232-depth.mosdepth.summary.txt:NODE_17964_length_376_cov_2.040134    376     169     0.45    0       1
+901522-depth.mosdepth.summary.txt:NODE_17964_length_376_cov_2.040134    376     420     1.12    0       3
+
+cat 400281-depth.mosdepth.summary.txt | awk ' $4 < .1 ' | cut -f 1 | while read line; do echo $line; grep $line *summary.txt; done; 
+cat 401261-depth.mosdepth.summary.txt | awk ' $4 < .1 ' | cut -f 1 | while read line; do echo $line; grep $line *summary.txt; done; 
+
+Some options:
+NODE_21382_length_87_cov_28.300000
+120092-depth.mosdepth.summary.txt:NODE_21382_length_87_cov_28.300000	87	140	1.61	0	2
+400281-depth.mosdepth.summary.txt:NODE_21382_length_87_cov_28.300000	87	0	0.00	0	0
+600232-depth.mosdepth.summary.txt:NODE_21382_length_87_cov_28.300000	87	62	0.71	0	1
+901232-depth.mosdepth.summary.txt:NODE_21382_length_87_cov_28.300000	87	37	0.43	0	1
+901522-depth.mosdepth.summary.txt:NODE_21382_length_87_cov_28.300000	87	201	2.31	0	3
+
+samtools idxstats
+The output is TAB-delimited with each line consisting of reference sequence name, sequence length, # mapped read-segments and # unmapped read-segments. It is written to stdout. Note this may count reads multiple times if they are mapped more than once or in multiple fragments.
+
+These are our candidate fish though
+600232, 901522, 901232, 120092
+400281, 401261, 500131, 701331
+
+```{sh, eval=FALSE}
+samtools view -q 10 120092-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "120092",$1,$2,$3,$4}' > 120092-sort.stats
+samtools view -q 10 600232-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "600232",$1,$2,$3,$4}' > 600232-sort.stats
+samtools view -q 10 901522-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "901522",$1,$2,$3,$4}' > 901522-sort.stats
+samtools view -q 10 901232-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "901232",$1,$2,$3,$4}' > 901232-sort.stats
+
+samtools view -q 10 400281-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "400281",$1,$2,$3,$4}' > 400281-sort.stats
+samtools view -q 10 401261-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "401261",$1,$2,$3,$4}' > 401261-sort.stats
+samtools view -q 10 500131-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "500131",$1,$2,$3,$4}' > 500131-sort.stats
+samtools view -q 10 701331-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "701331",$1,$2,$3,$4}' > 701331-sort.stats
+
+
+```
+(base) maccamp@farm:~/longfin-histories/data/male-flash$ grep NODE_21382_length_87_cov_28.300000 *sort.stats
+120092-sort.stats:120092 NODE_21382_length_87_cov_28.300000 87 2 0
+400281-sort.stats:400281 NODE_21382_length_87_cov_28.300000 87 0 0
+401261-sort.stats:401261 NODE_21382_length_87_cov_28.300000 87 0 0
+500131-sort.stats:500131 NODE_21382_length_87_cov_28.300000 87 0 0
+600232-sort.stats:600232 NODE_21382_length_87_cov_28.300000 87 1 0
+701331-sort.stats:701331 NODE_21382_length_87_cov_28.300000 87 0 0
+901232-sort.stats:901232 NODE_21382_length_87_cov_28.300000 87 1 0
+901522-sort.stats:901522 NODE_21382_length_87_cov_28.300000 87 4 0
+
+NODE_116_length_6410_cov_5.418759
+
+
+
+# I can also use dapc to separate sexes and see what genome-wide markers there are 

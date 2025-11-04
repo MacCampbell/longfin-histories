@@ -1,0 +1,118 @@
+---
+title: "212-sort-stats"
+output: html_document
+date: "2025-11-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message=FALSE)
+```
+
+Note, radseq here
+https://github.com/MacCampbell/ds-lh/blob/master/1500-sex-as-cofactor.Rmd
+
+we have a couple things we can do.
+
+/home/maccamp/angsd/angsd -P 24 -bam /home/maccamp/ds-lh/bamlists/1500.bamlist -yBin /home/maccamp/ds-lh/outputs/1500/sex.pheno -minMapQ 20 -minQ 20 -minInd 91 -doAsso 1 -GL 1 -out /home/maccamp/ds-lh/outputs>
+
+
+```{r}
+library(tidyverse)
+```
+cat *sort.stats > combined-sort.stats
+
+```{r}
+nm<-read_csv("meta/nm.csv")
+stats<-read_delim("outputs/212/combined-sort.stats", col_names = c("Sample","Contig","ContigLength","Reads","Unammped"), delim=" ")
+stat<-left_join(stats,nm)
+```
+
+```{r}
+avg<-stat %>% group_by(SexChar, Contig) %>% summarize(MeanReads=mean(Reads)) 
+f<-avg %>% filter(SexChar=="Female" & MeanReads==0)
+f
+```
+
+```{r}
+stat %>% filter(Contig %in% f$Contig) %>% filter(SexChar == "Male") %>% filter(Reads !=0) %>% group_by(Contig) %>% summarize(Count=n()) %>% filter(Count==4)
+```
+
+(base) ➜  212 git:(main) ✗ grep NODE_17217_length_402_cov_2.670769 combined-sort.stats 
+120092 NODE_17217_length_402_cov_2.670769 402 2 0
+400281 NODE_17217_length_402_cov_2.670769 402 0 0
+401261 NODE_17217_length_402_cov_2.670769 402 0 0
+500131 NODE_17217_length_402_cov_2.670769 402 0 0
+600232 NODE_17217_length_402_cov_2.670769 402 2 0
+701331 NODE_17217_length_402_cov_2.670769 402 0 0
+901232 NODE_17217_length_402_cov_2.670769 402 2 0
+901522 NODE_17217_length_402_cov_2.670769 402 8 0
+
+>NODE_17217_length_402_cov_2.670769
+GGGGGGGAGAGAGACTTGATTGTTGGGCAGACATTTCTCACACACAGTCATGTCACACAC
+TGTCCTAAACACCTGTCACAGGTACCATAGATCATCCAGATCTCAATAGATCCCTCCTCC
+TGCTCTCTTCTGACATACACACACACACACTCATGCACATACACAAGGATCCACAATCAG
+ACACACACTAACACGCTAACACACACGTTTGTAGTAAATCAATCGTGTGCCGTCACCCTG
+ACAGCCCTGACTGAGTGTCAGCATACTGATCTGATCACCCCTTCACAACACAATGGATCA
+ATCCAATATAGAGTGTGTGTACATAAGTACGTGTGTGTGTGTGTGTGTGTGTGTTTAAGT
+CAGTGTGTGTGTGTGTGTGTGTACGTGTGTGTCATGCTGCCT
+
+
+(base) ➜  212 git:(main) ✗ grep NODE_19636_length_120_cov_3.534884 combined-sort.stats 
+120092 NODE_19636_length_120_cov_3.534884 120 1 0
+400281 NODE_19636_length_120_cov_3.534884 120 0 0
+401261 NODE_19636_length_120_cov_3.534884 120 0 0
+500131 NODE_19636_length_120_cov_3.534884 120 0 0
+600232 NODE_19636_length_120_cov_3.534884 120 4 0
+701331 NODE_19636_length_120_cov_3.534884 120 0 0
+901232 NODE_19636_length_120_cov_3.534884 120 1 0
+901522 NODE_19636_length_120_cov_3.534884 120 1 0
+
+(base) maccamp@farm:~/longfin-histories/data/male-flash$ samtools faidx scaffolds.fasta NODE_19636_length_120_cov_3.534884
+>NODE_19636_length_120_cov_3.534884
+CATGTGTGTTTGTGAGAGGCTACACTAGATGTGTCTGAGTGTCCATGTGTGTTTGTGAGA
+GGCTACACTAGATGTGTCTGAGTGTCCATGTGTGTTTGTGAGAGGCTACACTAGATGTGT
+
+(base) ➜  212 git:(main) ✗ grep NODE_19946_length_112_cov_12.514286 combined-sort.stats 
+120092 NODE_19946_length_112_cov_12.514286 112 1 0
+400281 NODE_19946_length_112_cov_12.514286 112 0 0
+401261 NODE_19946_length_112_cov_12.514286 112 0 0
+500131 NODE_19946_length_112_cov_12.514286 112 0 0
+600232 NODE_19946_length_112_cov_12.514286 112 3 0
+701331 NODE_19946_length_112_cov_12.514286 112 0 0
+901232 NODE_19946_length_112_cov_12.514286 112 2 0
+901522 NODE_19946_length_112_cov_12.514286 112 1 0
+
+>NODE_19946_length_112_cov_12.514286
+CCTGCTGCTGCTAGCAGGGTCTCTCTCCCCTCTCTCCTGCTGCTGCTAGCAGGGTCTCTC
+TCCCCTCTCTCCTGCTGCTGCTAGCAGGGTCTCTCTCCCCTCTCTCCTGCTG
+
+(base) ➜  212 git:(main) ✗ grep NODE_20617_length_99_cov_23.090909 combined-sort.stats 
+120092 NODE_20617_length_99_cov_23.090909 99 2 0
+400281 NODE_20617_length_99_cov_23.090909 99 0 0
+401261 NODE_20617_length_99_cov_23.090909 99 0 0
+500131 NODE_20617_length_99_cov_23.090909 99 0 0
+600232 NODE_20617_length_99_cov_23.090909 99 2 0
+701331 NODE_20617_length_99_cov_23.090909 99 0 0
+901232 NODE_20617_length_99_cov_23.090909 99 2 0
+901522 NODE_20617_length_99_cov_23.090909 99 2 0
+
+>NODE_20617_length_99_cov_23.090909
+AGGTGTTTACTGTGTCGTGCGAGTGCTACTAAGGTGTTTACTGTGTCGTGCGTGTGCTAC
+TAAGGTGTTTACTGTGTCGTGCGAGTGCTACTAAGGTGT
+
+(base) ➜  212 git:(main) ✗ grep NODE_21382_length_87_cov_28.300000 combined-sort.stats 
+120092 NODE_21382_length_87_cov_28.300000 87 2 0
+400281 NODE_21382_length_87_cov_28.300000 87 0 0
+401261 NODE_21382_length_87_cov_28.300000 87 0 0
+500131 NODE_21382_length_87_cov_28.300000 87 0 0
+600232 NODE_21382_length_87_cov_28.300000 87 1 0
+701331 NODE_21382_length_87_cov_28.300000 87 0 0
+901232 NODE_21382_length_87_cov_28.300000 87 1 0
+901522 NODE_21382_length_87_cov_28.300000 87 4 0
+
+>NODE_21382_length_87_cov_28.300000
+CAGACCAGCTCTCAGGTCAACCACGAACAGACCAGCTCTCAGGTCAACCACGAACAGACC
+AGCTCTCAGGTCAACCACGAACAGACC
+Recovered NODE_21382_length_87_cov_28.300000
+
+#Does this pattern hold across all 20 high coverage fish?
