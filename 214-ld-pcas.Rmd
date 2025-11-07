@@ -1,0 +1,520 @@
+---
+title: "214-ld-pcas"
+output: html_document
+date: "2025-11-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message=FALSE)
+```
+
+```{r}
+library(RColorBrewer)
+library(vcfR)
+library(adegenet)
+library(tidyverse)
+```
+
+```{r}
+meta<-read_csv("meta/nm.csv")
+```
+
+Get called snps and do chrom by chrom PCAs
+
+```{sh, eval=FALSE}
+srun -t 48:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 72 -bam $HOME/longfin-histories/bamlists/80.bamlist -ref /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta  \
+-out outputs/212/snps-all \
+-minMaf 0.10 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/212/snps-all.out 2> outputs/212/snps-all.err &
+
+srun -t 48:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 72 -bam $HOME/longfin-histories/bamlists/80.bamlist -ref /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta  \
+-out outputs/212/snps-05 \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/212/snps-05.out 2> outputs/212/snps-05.err &
+```
+
+	-> Number of sites retained after filtering: 685942 
+```{sh,eval=FALSE}
+plink --tped snps-all.tped --tfam snps-all.tfam  --out plink --recode --allow-extra-chr --noweb
+plink --ped plink.ped --map plink.map --recode vcf --allow-extra-chr -out plink-10
+bgzip plink-10.vcf 
+tabix plink-10.vcf.gz
+
+plink --tped snps-05.tped --tfam snps-05.tfam  --out plink-05 --recode --allow-extra-chr --noweb
+plink --ped plink-05.ped --map plink-05.map --recode vcf --allow-extra-chr -out plink-05
+bgzip plink-05.vcf 
+tabix plink-05.vcf.gz
+
+
+#renaming vcf bcftools/1.13
+module load bcftools
+
+bcftools reheader --samples bamlists/80.names -o outputs/212/renamed-10.vcf.gz outputs/212/plink-10.vcf.gz
+bcftools reheader --samples bamlists/80.names -o outputs/212/renamed-05.vcf.gz outputs/212/plink-05.vcf.gz
+
+bcftools +fill-tags outputs/212/renamed-05.vcf.gz  -- -t MAF,F_MISSING | bcftools view -i 'F_MISSING < 0.05' | bcftools view -i 'INFO/MAF > 0.05' |  bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand  > outputs/212/pruned-05.vcf
+
+bcftools +fill-tags outputs/212/renamed-05.vcf.gz  -- -t MAF,F_MISSING | bcftools view -i 'F_MISSING < 0.05' | bcftools view -i 'INFO/MAF > 0.05' > outputs/212/plink-05-filtered.vcf
+
+bgzip outputs/212/plink-05-filtered.vcf
+tabix outputs/212/plink-05-filtered.vcf.gz
+
+# in 212
+
+gunzip -c renamed-10.vcf.gz |  grep "#" > header.txt 
+gunzip -c renamed-10.vcf.gz | grep -v "#" | awk 'BEGIN{i=0}{i++;if (i%100==0) print}' > t100.vcf
+gunzip -c renamed-10.vcf.gz | grep -v "#" | awk 'BEGIN{i=0}{i++;if (i%50==0) print}' > t50.vcf
+gunzip -c renamed-10.vcf.gz | grep -v "#" | awk 'BEGIN{i=0}{i++;if (i%20==0) print}' > t20.vcf
+
+gunzip -c plink-05-filtered.vcf.gz |  grep "#" > header.txt 
+gunzip -c plink-05-filtered.vcf.gz | grep -v "#" | awk 'BEGIN{i=0}{i++;if (i%100==0) print}' > t100-05.vcf
+gunzip -c plink-05-filtered.vcf.gz | grep -v "#" | awk 'BEGIN{i=0}{i++;if (i%50==0) print}' > t50-05.vcf
+gunzip -c plink-05-filtered.vcf.gz | grep -v "#" | awk 'BEGIN{i=0}{i++;if (i%20==0) print}' > t20-05.vcf
+
+
+
+cat header.txt t100.vcf > thinned100.vcf; bgzip thinned100.vcf; tabix thinned100.vcf.gz;
+cat header.txt t50.vcf > thinned50.vcf; bgzip thinned50.vcf; tabix thinned50.vcf.gz;
+cat header.txt t20.vcf > thinned20.vcf; bgzip thinned20.vcf; tabix thinned20.vcf.gz;
+
+cat header.txt t100-05.vcf > thinned100-05.vcf; bgzip thinned100-05.vcf; tabix thinned100-05.vcf.gz;
+cat header.txt t50-05.vcf > thinned50-05.vcf; bgzip thinned50-05.vcf; tabix thinned50-05.vcf.gz;
+cat header.txt t20-05.vcf > thinned20-05.vcf; bgzip thinned20-05.vcf; tabix thinned20-05.vcf.gz;
+```
+
+
+Run LD and PCAS
+
+```{sh, eval=FALSE}
+cat meta/super-chroms.txt  | while read line; do bcftools view -Ov -r $line outputs/214/thinned20.vcf.gz  > outputs/214/vcfs/$line.vcf; done;
+#cat meta/super-chroms.txt  | while read line; do bcftools view -Ov -r $line outputs/214/renamed-10.vcf.gz  > outputs/214/vcfs/$line.vcf; done;
+bcftools view -Ov -r SUPER_10:16000000- outputs/214/renamed-10.vcf.gz    > outputs/214/vcfs/SUPER_10-region.vcf
+bcftools view -Ov -r SUPER_6:0-3500000 outputs/214/renamed-10.vcf.gz    > outputs/214/vcfs/SUPER_6-region.vcf
+bcftools view -Ov -r SUPER_23:0-2500000 outputs/214/renamed-10.vcf.gz    > outputs/214/vcfs/SUPER_23-region.vcf
+bcftools view -Ov -r SUPER_24:6000000- outputs/214/renamed-10.vcf.gz    > outputs/214/vcfs/SUPER_24-region.vcf
+bcftools view -Ov -r SUPER_1:0-10000000 outputs/214/renamed-10.vcf.gz    > outputs/214/vcfs/SUPER_1-region.vcf
+
+bcftools view -Ov -r SUPER_10:16000000-16990620 outputs/214/renamed-10.vcf.gz    > outputs/214/vcfs/SUPER_10-region1.vcf
+bcftools view -Ov -r SUPER_10:17429051- outputs/214/renamed-10.vcf.gz    > outputs/214/vcfs/SUPER_10-region2.vcf
+
+for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basename $f vcf`ldf --allow-extra-chr --double-id; done;
+```
+
+
+
+```{r, eval=FALSE}
+files<-list.files("outputs/214/vcfs",pattern = "*.ldf.ld", full.names = TRUE)
+
+plotLd<-function(file) {
+  chrom<-gsub("outputs/214/vcfs/","",file)
+  chrom<-gsub(".ldf.ld","", chrom)
+  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% dplyr::arrange(R2) %>%  filter(R2 >0.3)
+
+  ggplot(lc) +
+  geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle(paste0(chrom))+
+  theme_bw() +
+  theme(panel.grid = element_blank())
+#ggsave(paste0("outputs/214/chrom-ld/",chrom,"-ld.pdf"))
+ggsave(paste0("outputs/214/chrom-ld/",chrom,"-ld.jpeg"))
+
+}
+
+lapply(files, plotLd)
+```
+
+
+Chrom PCS
+
+```{r, eval=FALSE}
+files<-list.files("outputs/214/vcfs",pattern = "*.vcf", full.names = TRUE)
+meta<-read_csv("meta/nm.csv")
+meta$pop<-meta$SexChar
+plotPCA<-function(file) {
+  meta<-meta
+  chrom<-gsub("outputs/214/vcfs/","",file)
+  chrom<-gsub(".vcf","", chrom)
+  
+  vcf<-read.vcfR(file=file)
+  genind<-vcfR2genind(vcf)
+  genind@pop<-as.factor(meta$pop)
+
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(meta)
+eig<-pca1$eig/sum(pca1$eig)*100
+
+
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=pop),pch=21, alpha=0.75, cex=2) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="H") +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") 
+ # geom_text_repel(aes(x=Axis1, y=Axis2,label=id))
+pc12
+
+ggsave(paste0("outputs/214/chrom-pcs/",chrom,"-pcs.pdf"))
+}
+
+lapply(files, plotPCA)
+```
+
+
+SUPER_24 is the interesting one here
+SUPER_23 is also interesting
+
+There is a huge gap in called snps on SUPER)10
+SUPER_10        16990620        SUPER_10_16990620       G       A       .       .       PR      GT      ./.     0/1     0/0     1/1     0/1     0/1
+        0/1     0/0     0/0     0/1     1/1     1/1     0/1     ./.     ./.     1/1     0/1     0/1     0/1     0/1     0/1     0/1     0/0     0/0
+        0/1     0/1     0/0     0/0     0/0     0/1     0/1     0/1     0/0     0/0     0/1     0/0     1/1     0/1     0/0     0/0     0/1     0/1
+        ./.     0/1     0/1     0/1     1/1     0/1     0/1     0/1     0/1     1/1     0/1     0/1     0/1     0/1     0/1     0/1     1/1     1/1
+        0/0     0/0     ./.     1/1     1/1     ./.     ./.     0/1     0/0     0/0     0/1     0/1     0/1     0/1     0/1     1/1     1/1     0/1
+        0/1     1/1
+        
+SUPER_10        17429051        SUPER_10_17429051       G       A       .       .       PR      GT      0/0     0/1     0/0     0/1     0/1     0/0
+        0/1     0/0     0/0     0/1     0/0     0/0     0/1     0/0     0/0     1/1     0/0     0/0     0/1     0/1     0/0     0/1     0/0     0/0
+        0/1     0/0     0/0     0/0     0/0     0/0     0/0     0/1     0/0     0/0     0/0     0/0     0/0     0/1     0/0     0/0     0/0     0/0
+        0/0     0/0     0/0     0/0     0/0     0/0     ./.     0/0     0/1     0/0     0/0     0/0     0/0     0/1     0/0     0/0     0/1     0/1
+        0/0     0/0     0/0     0/0     0/1     0/0     0/0     0/0     0/0     0/0     0/0     0/0     0/0     0/0     0/0     0/0     0/1     0/1
+        0/0     0/0
+        
+        
+        
+
+## Local PCA
+
+Need bcf files
+```{sh, eval=FALSE}
+cat meta/super-chroms.txt  | while read line; do bcftools view -Ob -r $line outputs/214/thinned20.vcf.gz  > outputs/214/bcfs/$line.bcf; done;
+#cat meta/super-chroms.txt  | while read line; do bcftools view -Ob -r $line outputs/214/renamed-10.vcf.gz  > outputs/214/bcfs/$line.bcf; done;
+
+for f in outputs/214/bcfs/*.bcf; do bcftools index $f; done;
+```
+
+```{r}
+samples<-meta %>% select(Sample) %>% rename(ID=Sample)
+
+population<-meta %>% select(SexChar) %>% rename(population=SexChar)
+
+table<-cbind(samples, population)
+write.table(table, "outputs/214/bcfs/sample_info.tsv", quote = TRUE, row.names = FALSE, sep="\t")
+```
+
+```{sh, eval=FALSE}
+#with thinned 20
+./run_lostruct.R -i /Users/mac/github/longfin-histories/outputs/214/bcfs -t snp -s 20 -m 5 -I /Users/mac/github/longfin-histories/outputs/214/bcfs/sample_info.tsv -j 214
+cp lostruct_results/type_snp_size_20_weights_none_jobid_214/mds_coords.csv ~/github/longfin-histories/outputs/214/
+
+# 40 snp windows
+./run_lostruct.R -i /Users/mac/github/longfin-histories/outputs/214/bcfs -t snp -s 40 -m 5 -I /Users/mac/github/longfin-histories/outputs/214/bcfs/sample_info.tsv -j 214
+cp lostruct_results/type_snp_size_40_weights_none_jobid_214/mds_coords.csv ~/github/longfin-histories/outputs/214/mds_coords-40.csv
+
+#10 snp
+./run_lostruct.R -i /Users/mac/github/longfin-histories/outputs/214/bcfs -t snp -s 10 -m 5 -I /Users/mac/github/longfin-histories/outputs/214/bcfs/sample_info.tsv -j 214
+cp lostruct_results/type_snp_size_10_weights_none_jobid_214/mds_coords.csv ~/github/longfin-histories/outputs/214/mds_coords-10.csv
+
+```
+
+```{r}
+mds<-read_csv("outputs/214/mds_coords-10.csv") # 10 snp windows
+
+mds<-read_csv("outputs/214/mds_coords-40.csv") # 40 snp windows
+mds<-read_csv("outputs/214/mds_coords.csv") # 20 snp windows
+
+
+mds$chrom<-factor(mds$chrom,levels=c("SUPER_1","SUPER_2","SUPER_3","SUPER_4","SUPER_5","SUPER_6","SUPER_7","SUPER_8","SUPER_9","SUPER_10","SUPER_11","SUPER_12","SUPER_13","SUPER_14","SUPER_15","SUPER_16","SUPER_17","SUPER_18","SUPER_19","SUPER_20","SUPER_21","SUPER_22","SUPER_23","SUPER_24","SUPER_25","SUPER_26","SUPER_27","SUPER_28"))
+#make tidy
+tidymds<-mds %>% gather(MDS, Value, 3:6)
+MDS1<-filter(tidymds, MDS=="MDS1") %>% rename(MDS1=MDS) %>% rename(Value1=Value)
+MDS2<-filter(tidymds, MDS=="MDS2") %>% rename(MDS2=MDS) %>% rename(Value2=Value)
+MDS3<-filter(tidymds, MDS=="MDS3") %>% rename(MDS3=MDS) %>% rename(Value3=Value)
+MDS4<-filter(tidymds, MDS=="MDS4") %>% rename(MDS4=MDS) %>% rename(Value4=Value)
+ggplot(mds)+
+  geom_point(aes(x=MDS1, y=MDS2, fill=chrom), pch=21, alpha=0.75) +
+  scale_fill_viridis_d(option="magma") +
+  theme_bw() +
+  theme(legend.position = 'none')
+
+
+ggplot(mds)+
+  geom_point(aes(x=MDS1, y=MDS3, fill=chrom), pch=21, alpha=0.75) +
+  scale_fill_viridis_d(option="magma") +
+  theme_bw() +
+  theme(legend.position = 'none')
+
+
+ggplot(mds)+
+  geom_point(aes(x=MDS1, y=MDS4, fill=chrom), pch=21, alpha=0.75) +
+  scale_fill_viridis_d(option="magma") +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+
+### MDS1
+
+```{r}
+p1<-MDS1 %>% arrange(chrom,window) %>%mutate(Index=1:n())
+
+out <- boxplot.stats(p1$Value1)$out
+out_ind <- which(p1$Value1 %in% c(out))
+length(out_ind)
+outliers<-p1[out_ind,]
+outliers %>% group_by(chrom) %>% summarize(Count=n()) %>% arrange(-Count)
+```
+
+```{r}
+#places to put labels based on index
+chroms<-p1 %>% group_by(chrom) %>% mutate(Start=min(Index), Stop=max(Index)) %>% select(chrom,Start,Stop) %>% unique() %>% 
+  mutate(Position=round((Start+Stop)/2))
+
+#Make enough colors
+nb.cols <- nrow(chroms)
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+
+ggplot(p1) +
+  geom_rect(data=chroms, aes(xmin=Start, xmax=Stop, ymin=min(p1$Value1), ymax=max(p1$Value1)), fill=mycolors, alpha=0.25) +
+  geom_point(data=p1, aes(x=Index, y=Value1, color=chrom), alpha=0.75, cex=0.5) +
+  geom_point(data=outliers, aes(x=Index, y=Value1), color="black", cex=0.5) +
+  theme_bw() +
+  scale_x_continuous(breaks=chroms$Position, labels=chroms$chrom) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=6)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  ylab("MDS1") +
+  xlab("Chromosome")
+```
+
+
+### MDS2
+```{r}
+p2<-MDS2 %>% arrange(chrom,window) %>% mutate(Index=1:n())
+out2 <- boxplot.stats(p2$Value2)$out
+out_ind2 <- which(p2$Value2 %in% c(out2))
+length(out_ind2)
+outliers2<-p2[out_ind2,]
+outliers2 %>% group_by(chrom) %>% summarize(Count=n()) %>% arrange(-Count)
+```
+
+
+```{r}
+chroms<-p2 %>% group_by(chrom) %>% mutate(Start=min(Index), Stop=max(Index)) %>% select(chrom,Start,Stop) %>% unique() %>% 
+  mutate(Position=round((Start+Stop)/2))
+
+#Make enough colors
+nb.cols <- nrow(chroms)
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+
+ggplot(p2) +
+  geom_rect(data=chroms, aes(xmin=Start, xmax=Stop, ymin=min(p2$Value2), ymax=max(p2$Value2)), fill=mycolors, alpha=0.25) +
+  geom_point(data=p2, aes(x=Index, y=Value2, color=chrom), alpha=0.75, cex=0.5) +
+  geom_point(data=outliers2, aes(x=Index, y=Value2), color="black", cex=0.5) +
+  theme_bw() +
+  scale_x_continuous(breaks=chroms$Position, labels=chroms$chrom) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=6)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  ylab("MDS2") +
+  xlab("Chromosome")
+```
+
+
+### MDS3
+```{r}
+p3<-MDS3  %>% arrange(chrom,window) %>% mutate(Index=1:n())
+
+out3 <- boxplot.stats(p3$Value3)$out
+out_ind3 <- which(p3$Value3 %in% c(out3))
+out_ind3
+outliers3<-p3[out_ind3,]
+outliers3 %>% group_by(chrom) %>% summarize(Count=n()) %>% arrange(-Count)
+```
+```{r}
+#places to put labels based on index
+chroms<-p3 %>% group_by(chrom) %>% mutate(Start=min(Index), Stop=max(Index)) %>% select(chrom,Start,Stop) %>% unique() %>% 
+  mutate(Position=round((Start+Stop)/2))
+
+#Make enough colors
+nb.cols <- nrow(chroms)
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+
+
+ggplot(p3) +
+  geom_rect(data=chroms, aes(xmin=Start, xmax=Stop, ymin=min(p3$Value3), ymax=max(p3$Value3)), fill=mycolors, alpha=0.25) +
+  geom_point(data=p3, aes(x=Index, y=Value3, color=chrom), alpha=0.75, cex=0.5) +
+  geom_point(data=outliers3, aes(x=Index, y=Value3), color="black", cex=0.5) +
+  theme_bw() +
+  scale_x_continuous(breaks=chroms$Position, labels=chroms$chrom) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=6)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  ylab("MDS3") +
+  xlab("Chromosome")
+```
+
+
+### MDS4
+```{r}
+p4<-MDS4  %>% arrange(chrom,window) %>% mutate(Index=1:n())
+
+out4 <- boxplot.stats(p4$Value4)$out
+out_ind4 <- which(p4$Value4 %in% c(out4))
+out_ind4
+outliers4<-p4[out_ind4,]
+outliers4 %>% group_by(chrom) %>% summarize(Count=n()) %>% arrange(-Count)
+```
+```{r}
+#places to put labels based on index
+chroms<-p4 %>% group_by(chrom) %>% mutate(Start=min(Index), Stop=max(Index)) %>% select(chrom,Start,Stop) %>% unique() %>% 
+  mutate(Position=round((Start+Stop)/2))
+
+#Make enough colors
+nb.cols <- nrow(chroms)
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+
+
+ggplot(p4) +
+  geom_rect(data=chroms, aes(xmin=Start, xmax=Stop, ymin=min(p4$Value4), ymax=max(p4$Value4)), fill=mycolors, alpha=0.25) +
+  geom_point(data=p4, aes(x=Index, y=Value4, color=chrom), alpha=0.75, cex=0.5) +
+  geom_point(data=outliers4, aes(x=Index, y=Value4), color="black", cex=0.5) +
+  theme_bw() +
+  scale_x_continuous(breaks=chroms$Position, labels=chroms$chrom) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=6)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  ylab("MDS4") +
+  xlab("Chromosome")
+```
+
+
+## Coverage in the big gap?
+
+There is a huge gap in called snps on SUPER)10
+SUPER_10        16990620        
+        
+SUPER_10        17429051        
+ 
+Look from SUPER_10 17000000-17400000
+
+Candidate fish in data/unmapped
+
+Let's repeat for all our fish, and use these candidate ones
+600232, 901522, 901232, 120092
+400281, 401261, 500131, 701331
+
+samtools view 600232.sort.bam SUPER_10:17000000-17400000 -b | samtools idxstats - | grep SUPER_10
+SUPER_10	17972843	42765	39
+SUPER_10_unloc_1	73700	0	0
+SUPER_10_unloc_2	43419	0	0
+
+samtools view 901522.sort.bam SUPER_10:17000000-17400000 -b | samtools idxstats - | grep SUPER_10
+SUPER_10	17972843	48235	48
+SUPER_10_unloc_1	73700	0	0
+SUPER_10_unloc_2	43419	0	0
+
+samtools view 901232.sort.bam SUPER_10:17000000-17400000 -b | samtools idxstats - | grep SUPER_10
+SUPER_10	17972843	35677	29
+SUPER_10_unloc_1	73700	0	0
+SUPER_10_unloc_2	43419	0	0
+
+samtools view 120092.sort.bam SUPER_10:17000000-17400000 -b | samtools idxstats - | grep SUPER_10
+SUPER_10	17972843	32439	22
+SUPER_10_unloc_1	73700	0	0
+SUPER_10_unloc_2	43419	0	0
+
+samtools view 400281.sort.bam SUPER_10:17000000-17400000 -b | samtools idxstats - | grep SUPER_10
+SUPER_10	17972843	38858	27
+SUPER_10_unloc_1	73700	0	0
+SUPER_10_unloc_2	43419	0	0
+
+samtools view 401261.sort.bam SUPER_10:17000000-17400000 -b | samtools idxstats - | grep SUPER_10
+SUPER_10	17972843	43867	27
+SUPER_10_unloc_1	73700	0	0
+SUPER_10_unloc_2	43419	0	0
+
+samtools view 500131.sort.bam SUPER_10:17000000-17400000 -b | samtools idxstats - | grep SUPER_10
+SUPER_10	17972843	46784	38
+SUPER_10_unloc_1	73700	0	0
+SUPER_10_unloc_2	43419	0	0
+
+samtools view 701331.sort.bam SUPER_10:17000000-17400000 -b | samtools idxstats - | grep SUPER_10
+SUPER_10	17972843	49370	37
+SUPER_10_unloc_1	73700	0	0
+SUPER_10_unloc_2	43419	0	0
+
+Definitely coverage. Would expect 'TTAGGG' for telomeres, what about centromeres? Should be repetitive stuff found on other chroms.
+
+```{sh, eval=FALSE}
+(base) maccamp@farm:~/genomes/hypomesus-curated$ samtools faidx fHypTra1.pri.cur.20251017.fasta SUPER_10:17000000-17400000 | head -n 50
+>SUPER_10:17000000-17400000
+CCACAGTAACACGTTAGAGCAGTGAAAACATCAAGAAAACCCTTCAGCCAGAAGTTGAAT
+GCCAAACATTGTAAATGCATGGAAAACGCTATTCAGGAGCTGAAAAGCACTTTAAAGCAA
+TAAAAAAATGAAAGTCTCTTAAACTGAATCTAAGGGCTACACAGCTTCAGAAAACACCTT
+TACCATGTAGTAACACCCACAGTAACACGTTAGAGCAGTGAAAACATCAAGAAAACCCTT
+CAGCCAGAAGTTACATGCTATACATTGTAAATGCATGGAAAACGCTATTCAGGAGCTGAA
+AAGCACTTTAAAGCAATAAAAAAATGAAAGTCTCTTAAACTGAATCTAAGGGCTACACAG
+CTTCAGAAAACACCTTTACCATGTAGTAACACCCACAGTAACACGGTAGAGCAGTGAAAA
+CATCAAGAAAACCCTTCAGCCAGAAGTTACATGCCAAACATTGTAAATGCATGGAAAACG
+CTATTCAGGAGCTGAAAAGCACTTTAAAGCAATAAAAAAATGAAAGTCTCTTAAACTGAA
+TCTAAGGGCTACACAGCTTCAGAAAACACCTTTACCATGTAGTAACACCCACAGTAACAC
+GTTAGAGCAGTGAAAACATCAAGAAAACCCTTCAGCCAGAAGTTGAATGCCAAACATTGT
+AAATGCATGGAAAACGCTATTCAGGAGCTGAAAAGCACTTTAAAGCAATAAAAAAATGAA
+AGTCTCTTAAACTGAATCTAAGGGCTACACAGCTTCAGAAAACACCTTTACCATGTAGTA
+ACACCCACAGTAACACGTTAGAGCAGTGAAAACATCAAGAAAACCCTTCAGCCAGAAGTT
+ACATGCCAAACATTGTAAATGCATGGAAAACGCTATTCAGGAGCTGAAAAGCACTTTAAA
+GCAATAAAAAAATGAAAGTCTCTTAAACTGAATCTAAGGGCTACACAGCTACAGAACACA
+CCTTTACCATGTAGTAACACCCACAGTAACACGTTAGAGCAGTGAAAACATCAAGAAAAC
+CCTTCAGCCAGAAGTTACATGCCAAACATTGTAAATGCATGGAAAACGCTATTCAGGAGC
+TGAAAAGAACTTTAAAGCAATAAAAAAATGAAAGTCTCTTAAACTGAATCTAAGGGCTAC
+ACAGCTTCAGAAAACACCTTTACCATGTAGTAACACCCACAGTAAAACGTTAGAGCAGTG
+AAAACATCAAGAAAACCCTTCAGCCAGAAGTTACATGCCAAACATTGTAAATGCATGGAA
+AACGCTATTCAGGAGCTGAAAAGCACTTTAAAGCAATAAAAAAATGAAAGTCTCTTAAAC
+TGAATCTAAGGGCTACACAGCTTCAGAAAACACCTTTACCATGTAGTAACACCCAGAGTA
+ACACGTTAGAGCAGTGAAAACATCAAGAAAACCCTTCAGCCAGAAGTTGAATGCCAAACA
+TTGTAAATGCATGGAAAACGCTATTCAGGAGCTGAAAAGCACTTTAAAGCAATAAAAAAA
+TGAAAGTCTCTTAAACTGAATCTAAGGGCTACACAGCTTCAGAAAACACCTTTACCATGT
+AGTAACACCCACAGTAACACGTTAGAGCAGTGAAAACATCAAGAAAACCCTTCAGCCAGA
+AGTTGAATGCCAAACATTGTAAATGCATGGAAAACGCTATTCAGGAGCTGAAAAGAACTT
+TAAAGCAATAAAAAAATGAAAGTCTCTTAAACTGAATCTAAGGGCTACACAGCTTCAGAA
+AAAACCTTTACCATGTAGTAACACCCACAGTAACACGGTAGAGCAGTGAAAACATCAAGA
+AAACCCTTCAGCCAGAAGTTACATGCCAAATATTGTAAATGCATGGAAAACGCTATTCAG
+GAGCTGAAAAGCACTTTAAAGCAATAAAAAAATGAAAGTCTCTTAAACTTAATGTAAGGG
+CCACACAGCTTCAGAAAAAACCTTTACCATGTAGTAACACCCACAGTAACACGTTAGAGC
+AGTGAAAACATCAAGAAAACCCTTCAGCCAGAAGTTACATGCCAAACATTGTAAATGCAT
+GGAAAACGCTATTCAGGAGCTGAAAAGCACTTTAAAGCAATAAAAAAATGAAAGTCTCTT
+AAACTGAATTTAAGGGCTACACAGCTTCAGAAAACACCTTTACCATGTAGTAACACCCAC
+AGTAAAACGTTAGAGCAGTGAAAACATCAAGAAAACCCTTCAGCCAGAAGTTACATGCCA
+AACATTGTAAATGCATGGAAAACGCTATTCAGGAGCTGAAAAGCACTTTAAAGCAATAAA
+AAAATGAAAGTCTCTTAAACTGAATCTAAGGGCTACACAGCTTCAGAAAACACCTTTACC
+ATGTAGTAACACCCACAGTAACACGTTAGAGCAGTGAAAACATCAAGAAAACCCTTCAGC
+CAGAAGTTGAATGCCAAACATTGTAAATGCATGGAAAACGCTATTCAGGAGCTGAAAAGC
+ACTTTAAAGCAATAAAAAAATGAAAGTCTCTTAAACTGAATCTAAGGGCTACACAGCTTC
+AGAAAACACCTTTACCATGTAGTAACACCCACAGTAACACGTTAGAGCAGTGAAAACATC
+AAGAAAACCCTTCAGCCAGAAGTTACATGCCAAACATTGTAAATGCATGGAAAACGCTAT
+TCAGGAGCTGAAAAGCACTTTAAAGCAATAAAAAAATGAAAGTCTCTTAAACTGAATCTA
+AGGGCTACACAGCTTCAGAAAACACCTTTACCATGTAGTAACAGCCACAGTAAAACGTTA
+GAGCAGTGAAAACATCAAGAAAACCCTTCAGCCAGAAGTTACATGCCAAACATTGTAAAT
+GCATGGAAAACGCTATTCAGGAGCTGAAAAGCACTTTAAAGCAATAAAAAAATGAAAGTC
+TCTTAAACTGAATCTAAGGGCTACACAGCTTCAGAAAACACCTTTACCATGTAGTAACAC
+```
+
+blastn indicates this repeat is found on all chroms in assembly and is probably a centromere.

@@ -39,6 +39,15 @@ ggplot(sag %>% filter(Dedup > 2e5)) +
 ```
 
 
+```{r}
+s116<-sag %>% filter(Dedup > 5e5)
+s72<-sag %>% filter(Dedup > 1e6)
+
+s116 %>% group_by(Pop) %>% summarize(Count=n(), Mean=mean(Dedup), Median=median(Dedup))
+ggplot(s116) +
+  geom_histogram(aes(x=Dedup)) 
+```
+
 ## Generate covariance matrix for sanity check
 
 ```{r}
@@ -47,6 +56,12 @@ s144 %>% select(Path) %>% write_tsv("bamlists/s144.bamlist", col_names = FALSE)
 s144 %>% select(ID) %>% write_tsv("bamlists/s144.names", col_names = FALSE)
 
 s144$Pop<-factor(s144$Pop, levels=c("ALVS","CHPI","SFBY","PETA","SUIB","HUMB","COLR","LWSH","PTLC","HRLC","SKNA","YBAK"))
+
+s72 %>% select(Path) %>% write_tsv("bamlists/s72.bamlist", col_names = FALSE)
+s72 %>% select(ID) %>% write_tsv("bamlists/s72.names", col_names = FALSE)
+
+s72$Pop<-factor(s72$Pop, levels=c("ALVS","CHPI","SFBY","PETA","SUIB","HUMB","COLR","LWSH","PTLC","HRLC","SKNA","YBAK"))
+
 ```
 
 ```{sh, eval=FALSE}
@@ -154,6 +169,13 @@ srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task
 -out outputs/300/snps-wgs  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/300/snps.out 2> outputs/300/snps.err &
+
+srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 65 -bam bamlists/s72.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
+-out outputs/300/snps-wgs-1m  \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/300/snps-1m.out 2> outputs/300/snps-1m.err &
 
 
 #create vcf
@@ -307,6 +329,7 @@ pc12<-ggplot(df) +
   guides(fill = guide_legend(override.aes = list(pch = 22))) +
   theme(legend.position = "top") 
 pc12
+ggsave("outputs/300/scaffold-26-region-pca.jpeg")
 ```
 ```{r}
 annotcols<-df %>% select(Axis1) %>% mutate(Sex = ifelse(Axis1 > 0, "Female","Male")) %>% select(-Axis1)

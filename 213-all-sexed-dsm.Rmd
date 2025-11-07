@@ -1,0 +1,125 @@
+---
+title: "213-all-sexed-dsm"
+output: html_document
+date: "2025-11-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(data.table)
+library(pheatmap)
+library(ggplotify)
+library(RColorBrewer)
+```
+
+
+Copying from here
+https://github.com/MacCampbell/dsm-omics/blob/main/300-gwas.Rmd
+
+
+```{r}
+df<-read_csv("outputs/213/samples-barcodes-01042022.csv")
+df
+```
+
+```{r}
+df<-read_csv("outputs/213/samples-barcodes-01042022.csv") %>% filter(str_detect(`Sample name`, '^\\d+')) %>%
+  separate(col = `Sample name`, into=c("X1","X2","X3","X4","X5","X6","X7"), sep="", remove=FALSE ) %>%
+  mutate(Sex = ifelse(X7==2, "female","male")) %>%
+  mutate(Pheno=ifelse(Sex=="female", 1, 0))
+```
+
+first two digits is a generation number, the three in the middle is a cross number, and the last number is for male/ female (1 or 2).
+
+
+Bring in coverage:
+
+```{r}
+files<-list.files(path="outputs/213", pattern="*.cov", full.names=TRUE)
+list<-lapply(files, read_tsv, col_names=FALSE) 
+names<-lapply(files, basename)
+all<-mapply(c, list, names, SIMPLIFY = FALSE)
+comb<-as_tibble(rbindlist(all, fill=T)) %>% rename(Coverage=X1, CovFile=V1)
+
+comb$SeqFile<-gsub(".cov",".bam",comb$CovFile)
+comb$`Sample name`<-gsub("_R1.sort.flt.bam","",comb$SeqFile)
+comb<-select(comb, -CovFile)
+```
+
+
+```{r}
+files<-list.files(path="outputs/213", pattern="*.cov", full.names=TRUE)
+list<-lapply(files, read_tsv, col_names=FALSE) 
+names<-lapply(files, basename)
+all<-mapply(c, list, names, SIMPLIFY = FALSE)
+comb<-as_tibble(rbindlist(all, fill=T)) %>% rename(Coverage=X1, CovFile=V1)
+
+comb$SeqFile<-gsub(".cov",".bam",comb$CovFile)
+comb$`Sample name`<-gsub("_R1.sort.flt.bam","",comb$SeqFile)
+comb<-select(comb, -CovFile)
+```
+
+Merge   
+```{r}
+df<-left_join(df,comb) %>% filter(Coverage !="NA")
+nrow(df)
+mean(df$Coverage)
+```
+
+```{r}
+ggplot(df) +
+  geom_histogram(aes(Coverage, fill=Sex)) +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  ylab("Count") +
+  theme(axis.title = element_text(face="bold")) +
+  scale_y_continuous(breaks=c(0,5,10,15,20,25))
+```
+
+
+Creating a tester bamlit
+
+```{r}
+tester<-df %>% filter(Coverage > mean(df$Coverage) - sd(df$Coverage)) %>%
+  filter(Coverage < mean(df$Coverage) + sd(df$Coverage)) %>%
+  mutate(String=paste0("/home/maccamp/dsm-omics/data/",`library number`,"/",SeqFile))
+  
+  
+tester %>% group_by(Sex) %>% summarize(Count=n())
+```
+
+```{r}
+nrow(tester)
+mean(tester$Coverage)
+```
+
+
+
+Let's get fish not in tester
+
+```{r}
+df2<-df %>% filter(!`Sample name` %in% tester$`Sample name`)
+
+ggplot(df2) +
+  geom_histogram(aes(Coverage, fill=Sex)) +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  ylab("Count") +
+  theme(axis.title = element_text(face="bold")) +
+  scale_y_continuous(breaks=c(0,5,10,15,20,25))
+df2 %>% filter(Coverage >= 10)
+```
+
+Can expect 16 fish with >=10x coverage
+
+in sub2, putting these 24 seqs, ln -s from 
+/home/maccamp/dsm-omics/data/ into
+data/sub2/
+
+Aligning like so:
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta
+

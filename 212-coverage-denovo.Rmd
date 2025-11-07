@@ -115,4 +115,5 @@ CAGACCAGCTCTCAGGTCAACCACGAACAGACCAGCTCTCAGGTCAACCACGAACAGACC
 AGCTCTCAGGTCAACCACGAACAGACC
 Recovered NODE_21382_length_87_cov_28.300000
 
+Previously, misplaced females = 3
 #Does this pattern hold across all 20 high coverage fish?
