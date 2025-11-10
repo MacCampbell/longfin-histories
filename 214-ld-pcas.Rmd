@@ -36,6 +36,8 @@ srun -t 48:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-t
 ```
 
 	-> Number of sites retained after filtering: 685942 
+	-> Number of sites retained after filtering: 1065635 (SNP -5) 
+
 ```{sh,eval=FALSE}
 plink --tped snps-all.tped --tfam snps-all.tfam  --out plink --recode --allow-extra-chr --noweb
 plink --ped plink.ped --map plink.map --recode vcf --allow-extra-chr -out plink-10
@@ -55,6 +57,7 @@ bcftools reheader --samples bamlists/80.names -o outputs/212/renamed-10.vcf.gz o
 bcftools reheader --samples bamlists/80.names -o outputs/212/renamed-05.vcf.gz outputs/212/plink-05.vcf.gz
 
 bcftools +fill-tags outputs/212/renamed-05.vcf.gz  -- -t MAF,F_MISSING | bcftools view -i 'F_MISSING < 0.05' | bcftools view -i 'INFO/MAF > 0.05' |  bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand  > outputs/212/pruned-05.vcf
+#Using random seed: 1762813987
 
 bcftools +fill-tags outputs/212/renamed-05.vcf.gz  -- -t MAF,F_MISSING | bcftools view -i 'F_MISSING < 0.05' | bcftools view -i 'INFO/MAF > 0.05' > outputs/212/plink-05-filtered.vcf
 
@@ -72,6 +75,7 @@ gunzip -c plink-05-filtered.vcf.gz |  grep "#" > header.txt
 gunzip -c plink-05-filtered.vcf.gz | grep -v "#" | awk 'BEGIN{i=0}{i++;if (i%100==0) print}' > t100-05.vcf
 gunzip -c plink-05-filtered.vcf.gz | grep -v "#" | awk 'BEGIN{i=0}{i++;if (i%50==0) print}' > t50-05.vcf
 gunzip -c plink-05-filtered.vcf.gz | grep -v "#" | awk 'BEGIN{i=0}{i++;if (i%20==0) print}' > t20-05.vcf
+gunzip -c plink-05-filtered.vcf.gz | grep -v "#" | awk 'BEGIN{i=0}{i++;if (i%10==0) print}' > t10-05.vcf
 
 
 
@@ -82,6 +86,8 @@ cat header.txt t20.vcf > thinned20.vcf; bgzip thinned20.vcf; tabix thinned20.vcf
 cat header.txt t100-05.vcf > thinned100-05.vcf; bgzip thinned100-05.vcf; tabix thinned100-05.vcf.gz;
 cat header.txt t50-05.vcf > thinned50-05.vcf; bgzip thinned50-05.vcf; tabix thinned50-05.vcf.gz;
 cat header.txt t20-05.vcf > thinned20-05.vcf; bgzip thinned20-05.vcf; tabix thinned20-05.vcf.gz;
+cat header.txt t10-05.vcf > thinned10-05.vcf; bgzip thinned10-05.vcf; tabix thinned10-05.vcf.gz;
+
 ```
 
 
@@ -103,6 +109,11 @@ for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basen
 ```
 
 
+```{sh, eval=FALSE}
+cat meta/super-chroms.txt  | while read line; do bcftools view -Ov -r $line outputs/214/thinned10-05.vcf.gz  > outputs/214/vcfs/$line.vcf; done;
+for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basename $f vcf`ldf --allow-extra-chr --double-id; done;
+
+```
 
 ```{r, eval=FALSE}
 files<-list.files("outputs/214/vcfs",pattern = "*.ldf.ld", full.names = TRUE)
@@ -201,6 +212,14 @@ cat meta/super-chroms.txt  | while read line; do bcftools view -Ob -r $line outp
 
 for f in outputs/214/bcfs/*.bcf; do bcftools index $f; done;
 ```
+
+```{sh, eval=FALSE}
+cat meta/super-chroms.txt  | while read line; do bcftools view -Ob -r $line outputs/214/thinned10-05.vcf.gz  > outputs/214/bcfs/$line.bcf; done;
+#cat meta/super-chroms.txt  | while read line; do bcftools view -Ob -r $line outputs/214/renamed-10.vcf.gz  > outputs/214/bcfs/$line.bcf; done;
+
+for f in outputs/214/bcfs/*.bcf; do bcftools index $f; done;
+```
+
 
 ```{r}
 samples<-meta %>% select(Sample) %>% rename(ID=Sample)

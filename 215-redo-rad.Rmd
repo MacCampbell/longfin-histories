@@ -1,0 +1,68 @@
+---
+title: "215-redo-rad"
+output: html_document
+date: "2025-11-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+
+```{r}
+library(RColorBrewer)
+library(vcfR)
+library(adegenet)
+library(tidyverse)
+```
+
+The goal is to go to the radseq from the G3 paper and realign etc.
+
+(base) ➜  github git clone https://github.com/MacCampbell/delta-smelt/
+Cloning into 'delta-smelt'...
+
+
+```{r}
+lh<-read_csv("../delta-smelt/metadata/2012-all-samples.csv")
+lh
+```
+
+We want to move all the .fastqs to my longfin-histories/redo Looks like they are gzipped
+
+(base) maccamp@farm:~/longfin-histories/data/redo$ cut -f 4 -d ',' ~/delta-smelt/metadata/2012-all-samples.csv  | while read line; do cp ~/ds-lh/data/$line*fastq ./; done;
+
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG048/ACTGAT$ 
+
+Files are in 
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG043/ATCACG/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG043/CGATGT/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG044/ACAGTG/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG044/GCCAAT/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG045/ACTTGA/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG045/CAGATC/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG045/GATCAG/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG046/AGTCAA/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG046/AGTTCC/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG046/CTTGTA/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG047/ATGTCA/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG047/CCGTCC/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG047/GTCCGC/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG047/GTGAAA/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG048/ACTGAT/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG048/ATTCCT/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG048/CGTACG/
+/group/millermrgrp2/shannon/projects/DS_history/data/BMAG048/GTGGCC/
+
+cat dirs  | while read line; do ln -s $line*.fastq.gz .; done;
+ 
+ 
+we want a file like
+Ht20-33_2012_A05_R1.fastq.gz    Ht20-33_2012_A05_R2.fastq.gz    Ht20-33_2012_A05
+
+```{r}
+lh %>% select(`Sequence File Name`) %>% mutate(Forward=paste0(`Sequence File Name`,"_R1.fastq.gz")) %>% mutate(Reverse=paste0(`Sequence File Name`,"_R2.fastq.gz")) %>% relocate(Forward, Reverse, `Sequence File Name`) %>%
+  write_tsv("215.1-to-align.tsv", col_names = FALSE)
+```
+
+165 samples to align
+
