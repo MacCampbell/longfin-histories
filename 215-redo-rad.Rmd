@@ -23,7 +23,8 @@ Cloning into 'delta-smelt'...
 
 
 ```{r}
-lh<-read_csv("../delta-smelt/metadata/2012-all-samples.csv")
+lh<-read_csv("../delta-smelt/metadata/2012-all-samples.csv") %>% mutate(Pheno=ifelse(aggregated_new_classes=="MIG",0,1)) %>% mutate(SexPheno=sex-1)
+
 lh
 ```
 
@@ -65,4 +66,181 @@ lh %>% select(`Sequence File Name`) %>% mutate(Forward=paste0(`Sequence File Nam
 ```
 
 165 samples to align
+in data/redo
+```{sh, eval=FALSE}
+cp ../../215.1-to-align.tsv ./to-align.txt
+cut -f 1 to-align.txt  | while read line; do ls $line; done; #all files present
 
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta
+```
+
+couple of jobs stuck
+28559307  maccamp          med            Ht19-23_2012_G03.sh  S   8-10:58:15   2     1     N/A           cpu-9-64            
+28559303  maccamp          med            Ht19-86_2012_F11.sh  S   8-10:59:52   2     1     N/A           cpu-9-63            
+
+```{sh, eval=FALSE}
+sbatch -p high -t 1-11:00:00 --mem=8G  Ht19-23_2012_G03.sh
+sbatch -p high -t 1-11:00:00 --mem=8G  Ht19-86_2012_F11.sh
+```
+
+Now I need to drop individuals without sex id. Jim says:    
+1 = male      
+2= female     
+0= can't tell, if the fish had spawned and not residual gonad tissue was available the fish is scored a 0    
+
+```{r}
+lh %>% filter(sex !=0) %>% group_by(aggregated_new_classes, sex) %>% summarize(Count=n())
+reads<-lh %>% left_join(read_csv("outputs/215/stats.csv", col_names=c("Sequence File Name","Reads","Dedup","Cov")))
+```
+
+Join with coverage data, and get pheno and bamlist sorted based on some sort of coverage. For the paper, kept 122 samples previously. This approach gives us 121, so altering a bit and gitting 121. not caring
+
+couple jobs 
+
+we can bind stats on to lh with a 'reads' df and copy from here
+
+
+
+```{r}
+tops<-reads %>% top_frac(.75, Dedup) %>% filter(sex!=0)
+#previous<-read_csv("~/github/delta-smelt/metadata/2012-samples.csv") %>% select(`Sequence File Name`)
+tops<-reads %>% filter(`Sequence File Name` %in% previous$`Sequence File Name`)
+samplesize<-tops %>% group_by(aggregated_new_classes ,sex) %>% summarize(`Sample Size`=n())
+samplesize
+```
+
+```{r}
+ggplot(tops) +
+  geom_histogram(aes(Dedup)) +
+  facet_wrap(.~Pheno) +
+  xlim(0, max(tops$Dedup))
+```
+
+```{r}
+tops %>% group_by(aggregated_new_classes, sex) %>% select(Dedup) %>% summarize_all(mean) %>% left_join(samplesize)
+```
+
+
+
+## Generate Bamlists, Phenotype and Sex Files
+
+```{r}
+bamlist<-tops %>% mutate(Path=paste0("data/redo/",`Sequence File Name`,".sort.flt.bam")) %>% select(Path)
+write_tsv(bamlist, "bamlists/2012.bamlist", col_names=FALSE)
+
+phenos<-tops %>% select(Pheno) 
+write_tsv(phenos, "phenos/2012.phenos", col_names=FALSE)
+
+sex<-tops %>% select(sex)
+write_tsv(sex, "phenos/2012.cov", col_names=FALSE)
+
+sexpheno<-tops %>% select(SexPheno)
+write_tsv(sexpheno, "phenos/2012-sex.phenos", col_names=FALSE)
+
+
+write_csv(tops, "meta/2012-samples.csv")
+```
+
+
+## Run sex gwas
+
+
+## Run pheno gwas
+
+
+## Figure 2
+
+doAsso     
+With and without sex as cov at 75% thresh for individuals
+srun -t 72:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -P 12 
+no -rf $HOME/genomes/hypomesus-20210204/large-contigs.txt 
+```{sh, eval=FALSE}
+srun -p high -t 24:00:00 --mem=32G --nodes=1 --cpus-per-task=12 $HOME/angsd/angsd -P12  -bam $HOME/longfin-histories/bamlists/2012.bamlist \
+-yBin $HOME/longfin-histories/phenos/2012.phenos -cov $HOME/longfin-histories/phenos/2012.cov -minMapQ 20 -minQ 20 -minInd 91 -doAsso 2 \
+-doPost 1 -GL 1 -minCount 2 -out $HOME/longfin-histories/outputs/215/assoc05-75-2 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-ref $HOME/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta \
+> outputs/215/assoc05-75-2.out 2> outputs/215/assoc05-75-2.err &
+
+srun -p high -t 24:00:00 --mem=32G --nodes=1 --cpus-per-task=12 $HOME/angsd/angsd -P12  -bam $HOME/longfin-histories/bamlists/2012.bamlist \
+-yBin $HOME/longfin-histories/phenos/2012.phenos -minMapQ 20 -minQ 20 -minInd 91 -doAsso 2 -doPost 1 -GL 1 -minCount 2 \
+-out $HOME/longfin-histories/outputs/215/assoc05-75-2-nocov -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-ref $HOME/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta \
+> outputs/215/assoc05-75-2-nocov.out 2> outputs/215/assoc05-75-2-nocov.err &
+
+srun -p high -t 24:00:00 --mem=32G --nodes=1 --cpus-per-task=12 $HOME/angsd/angsd -P12  -bam $HOME/longfin-histories/bamlists/2012.bamlist \
+-yBin $HOME/longfin-histories/phenos/2012.phenos -minMapQ 20 -minQ 20 -minInd 91 -doAsso 1 -GL 1 -minCount 2 \
+-out $HOME/longfin-histories/outputs/215/assoc05-75-2-nocov -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-ref $HOME/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta \
+> outputs/215/assoc05-75-1-nocov.out 2> outputs/215/assoc05-75-1-nocov.err &
+```
+
+Check on these:
+
+```{r}
+df<-read_tsv(file="outputs/100/assoc05-75-2.lrt0.gz") %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
+  filter(log10p>=0 & log10p != "Inf") %>%
+  mutate(p = dchisq(LRT, df=1)) %>%
+  mutate(bonfer = p.adjust(p, method = "bonferroni")) %>% 
+  mutate(BHfdr = p.adjust(p, method = "BH")) %>%
+  group_by(Chromosome) %>%
+  mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
+  mutate(BHfdrchrom = p.adjust(p, method = "BH"))
+
+df %>% arrange(-LRT) %>% head(n=20)
+```
+
+Calculate some significance threshold
+```{r}
+variants<-nrow(df)
+#Number of expected variants
+num<-25
+p.T = num/variants 
+prior.odds = p.T/(1-p.T) 
+pwr = 1 #upper bound for power --> upper bound for alpha 
+post.odds = 0.95/(1-0.95) 
+alpha = prior.odds*pwr/post.odds 
+paste(signif(alpha,3)) 
+-log10(alpha)
+df %>% dplyr::filter(log10p > -log10(alpha)) 
+write_csv(df, file="outputs/figure-2/association-results.csv")
+```
+
+```{r}
+
+data<-df  %>% filter(str_detect(Chromosome, "lg"))
+dd <- data %>% ungroup %>% mutate(Index=1:n())
+dd$Chromosome<-as.factor(dd$Chromosome)
+
+chroms<-dd %>% group_by(Chromosome) %>% mutate(Start=min(Index), Stop=max(Index)) %>% 
+  select(Chromosome,Start,Stop) %>% unique() %>% 
+  mutate(Position=round((Start+Stop)/2))
+
+outliers <- dd %>% filter(log10p >= -log10(alpha))
+#Make enough colors
+nb.cols <- nrow(chroms)
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+#randomize
+mycolors<-sample(mycolors)
+
+ggplot(dd) +
+  geom_point(data=dd, aes(x=Index, y=log10p, color=Chromosome), alpha=0.75, cex=0.5) +
+  geom_point(data=outliers, aes(x=Index, y=log10p, fill=Chromosome), pch=21, cex=2, alpha=0.9) +
+ # geom_hline(yintercept = -log10(0.05/nrow(dddf)), col="black", linetype=2, alpha=0.5) +
+  geom_hline(yintercept= -log10(alpha), col="black", linetype=1, alpha=0.5) +
+  theme_bw() +
+  scale_x_continuous(breaks=chroms$Position, labels=chroms$Chromosome) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=8)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  scale_fill_manual(breaks=unique(dd$Chromosome), values=mycolors) +
+  ylab("-log10(p)\n") +
+  xlab("\nChromosome") +
+  ggtitle("FWR vs MIG Comparison") +
+  labs(subtitle = "Sex as Covariant") +
+  theme(plot.title = element_text(hjust=0.5, face="bold") ) +
+  theme(plot.subtitle = element_text(hjust=0.5))
+
+ggsave("outputs/figure-2/figure-2.jpg", width=8.5, height=11/3)
+```
