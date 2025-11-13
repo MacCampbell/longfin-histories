@@ -123,3 +123,62 @@ data/sub2/
 Aligning like so:
 bash ../../101.2-do-align.sh to-align.txt /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta
 
+Have sub2.csv
+
+```{r}
+sub2<-read_csv("outputs/213/sub2.csv", col_names = c("Sample","Sort","Dedup","Cov")) %>% mutate(Path=paste0("/home/maccamp/longfin-histories/data/sub2/",Sample,".sort.flt.bam"))
+sub2$Sex<-gsub("^\\d\\d\\d\\d\\d","",sub2$Sample)
+sub2$Sex<-as.numeric(sub2$Sex)
+sub2<-sub2 %>% mutate(Pheno=Sex-1) %>% mutate(SexChar=ifelse(Sex==2, "Male","Female"))
+
+nm2<-read_csv(file="meta/nm.csv")
+nm3 <- bind_rows(nm2,sub2)
+```
+
+```{r}
+ggplot(nm3 %>% filter(Cov >=10)) +
+  geom_histogram(aes(Cov, fill=SexChar)) +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  ylab("Count") +
+  theme(axis.title = element_text(face="bold")) +
+  scale_y_continuous(breaks=c(0,5,10,15,20,25))
+```
+
+```{r}
+m92<-nm3 %>% filter(Cov >=10)
+m92 %>% select(Pheno) %>% write_tsv("bamlists/92.pheno", col_names = FALSE)
+m92 %>% select(Path) %>% write_tsv("bamlists/92.bamlist", col_names = FALSE)
+m92 %>% select(Sample) %>% write_tsv("bamlists/92.names", col_names=FALSE)
+m92 %>% filter(SexChar=="Female") %>% select(Sample) %>% write_tsv("bamlists/92-females.names", col_names=FALSE)
+m92 %>% filter(SexChar=="Male") %>% select(Sample) %>% write_tsv("bamlists/92-males.names", col_names=FALSE)
+```
+
+
+```{sh,eval=FALSE}
+ srun -t 72:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -P 12 \
+ -doAsso 1 -yBin $HOME/longfin-histories/bamlists/92.pheno -GL 1 -minInd 69 -minMaf 0.10 \
+ -minMapQ 20 -minQ 20 \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/213/asso-75 \
+ -bam $HOME/longfin-histories/bamlists/92.bamlist  > outputs/213/asso-75.out 2> outputs/213/asso-75.err &
+```
+
+```{r}
+files = list.files(path="outputs/212/", pattern="*75.lrt0.gz", full.names = TRUE)
+list = lapply(files, read_tsv)
+data<-bind_rows(list)
+```
+
+```{r}
+df <- data %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
+  filter(log10p>=0 & log10p != "Inf") %>%
+  mutate(p = dchisq(LRT, df=1)) %>%
+  mutate(bonfer = p.adjust(p, method = "bonferroni")) %>% 
+  mutate(BHfdr = p.adjust(p, method = "BH")) %>%
+  group_by(Chromosome) %>%
+  mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
+  mutate(BHfdrchrom = p.adjust(p, method = "BH")) %>% ungroup() %>%
+  mutate(Index=1:n())
+
+df %>% arrange(-LRT) %>% head(n=20)
+```
