@@ -1,5 +1,5 @@
 data/alt-polish/LFS1049.sort.flt.bam
-data/downsample/LFS1099.reduced.bam
+data/alt-polish/LFS1099.sort.flt.bam
 data/downsample/LFS1100.reduced.bam
 data/downsample/LFS1102.reduced.bam
 data/downsample/LFS1104.reduced.bam
@@ -7,7 +7,7 @@ data/downsample/LFS1108.reduced.bam
 data/downsample/LFS1341.reduced.bam
 data/alt-polish/LFS1348.sort.flt.bam
 data/downsample/LFS1349.reduced.bam
-data/downsample/LFS1350.reduced.bam
+data/alt-polish/LFS1350.sort.flt.bam
 data/downsample/LFS1351.reduced.bam
 data/downsample/LFS1352.reduced.bam
 data/downsample/LFS1353.reduced.bam
