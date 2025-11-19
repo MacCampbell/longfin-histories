@@ -2,7 +2,7 @@
 
 #Setting up for 
 #Requires a tab delimited list of paired end files with desired name (list, $1)
-#SRR1613242_1  SRR1613242_2 SRR1613242
+#SRR1613242_1.fastq.gz  SRR1613242_2.fastq.gz SRR1613242
 
 #Requires a path to indexed reference genome (ref, $2)
 # /home/maccamp/genomes/GCF021917145.1/GCF_021917145.1_fHypTra1_genomic.fna

@@ -245,7 +245,7 @@ snps<-import.snpR.data(genotypes = "outputs/300/plink-pruned-max-1m.vcf",
 ```
 
 ```{r}
-p <- plot_clusters(snps, facets = c("Pop"), viridis.option = "H")
+p <- plot_clusters(snpsRAND, facets = c("Pop"), viridis.option = "H")
 p$plot$pca
 
 ggsave("outputs/300/lfs-pca-rand-1m.jpeg")
@@ -258,7 +258,47 @@ p$plot$pca
 ggsave("outputs/300/lfs-pca-1m.jpeg")
 ```
 
+```{r}
+ddf<-p$data$pca %>% as_tibble()
+ddf$Pop<-factor(ddf$Pop, levels=c("ALVS","CHPI","SFBY","PETA","SUIB","HUMB","COLR","LWSH","PTLC","HRLC","SKNA","YBAK"))
 
+labels<-ddf %>% group_by(Pop) %>% summarize(x=mean(PC1), y=mean(PC2), SampleSize=n())
+
+p12<-ggplot(ddf) +
+  geom_point(aes(x=PC1, y=PC2, fill=Pop), pch=21, alpha=.75) +
+  geom_text_repel(data=labels, aes(x=x, y=y, label=paste0(Pop, " ", SampleSize)), max.overlaps = Inf) +
+  scale_fill_viridis_d(option="H") +
+  xlab(paste0("PC1 ", p$pca_loadings[1],"%")) +
+  ylab(paste0("PC2 ", p$pca_loadings[2],"%")) +
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  ggtitle("B") +
+  theme(plot.title = element_text(hjust=0, size=16)) 
+
+
+p12
+ggsave("outputs/300/pc1.jpeg")
+
+vardf<-p$pca_loadings %>% as_tibble() %>% rename(`Percent Variance`=value) %>% head() %>% mutate(PC=1:n())
+
+scree<-ggplot(vardf, aes(x=PC, y=`Percent Variance`)) +
+  geom_line() +
+  geom_point() +
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  scale_x_continuous(breaks = seq(1:6)) +
+  theme(axis.text = element_text(size=10)) +
+  theme(axis.title = element_text(size=14)) +
+  theme(plot.title = element_text(hjust=0, size=16)) +
+  theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  ggtitle("A") +
+  theme(plot.title = element_text(hjust=0, size=16)) 
+
+scree
+
+ggsave("outputs/300/scree.jpeg")
+
+```
 
 ## LD
 
@@ -440,8 +480,185 @@ ggsave(paste0("outputs/300/chrom-pcs/",chrom,".pdf"))
 lapply(files, plotPCA)
 ```
 
+## Local PCA
 
-Make phylo
+```{sh, eval=FALSE}
+
+ gunzip -c filtered-1m.vcf.gz | perl -pe 's/lcl\|//g' > filtered-1m-lcl.vcf
+bgzip, tabix
+cat 1mbseqs.txt | perl -pe 's/lcl\|//g' > 1mbseqs-lcl.txt
+
+cat outputs/300/1mbseqs-lcl.txt  | while read line; do bcftools view -Ob -r $line outputs/300/filtered-1m-lcl.vcf.gz  > outputs/300/bcfs/$line.bcf; done;
+
+for f in outputs/300/bcfs/*.bcf; do bcftools index $f; done;
+```
+
+
+```{r}
+samples<-s72 %>% select(ID) %>% rename(ID=ID )
+
+population<-s72 %>% select(Pop) %>% rename(population=Pop)
+
+table<-cbind(samples, population)
+write.table(table, "outputs/300/bcfs/sample_info.tsv", quote = TRUE, row.names = FALSE, sep="\t")
+```
+
+```{sh, eval=FALSE}
+./run_lostruct.R -i /Users/mac/github/longfin-histories/outputs/300/bcfs -t snp -s 40 -m 5 -I /Users/mac/github/longfin-histories/outputs/300/bcfs/sample_info.tsv -j 300
+
+./run_lostruct.R -i /Users/mac/github/longfin-histories/outputs/300/bcfs -t snp -s 10 -m 5 -I /Users/mac/github/longfin-histories/outputs/300/bcfs/sample_info.tsv -j 300
+
+cp lostruct_results/type_snp_size_20_weights_none_jobid_300/mds_coords.csv ~/github/longfin-histories/outputs/300/
+cp lostruct_results/type_snp_size_40_weights_none_jobid_300/mds_coords.csv ~/github/longfin-histories/outputs/300/mds_coords-40.csv
+cp lostruct_results/type_snp_size_10_weights_none_jobid_300/mds_coords.csv ~/github/longfin-histories/outputs/300/mds_coords-10.csv
+
+```
+
+
+
+```{r}
+mds<-read_csv("outputs/300//mds_coords.csv") # 20 snp windows
+#mds<-read_csv("outputs/300//mds_coords-40.csv")
+#mds<-read_csv("outputs/300//mds_coords-10.csv")
+
+mds$chrom<-factor(mds$chrom,levels=c("scaffold_1","scaffold_2","scaffold_3","scaffold_4","scaffold_5","scaffold_6","scaffold_7","scaffold_8","scaffold_9","scaffold_10","scaffold_11","scaffold_12","scaffold_13","scaffold_14","scaffold_15","scaffold_16","scaffold_17","scaffold_18","scaffold_19","scaffold_20","scaffold_21","scaffold_22","scaffold_23","scaffold_24","scaffold_25","scaffold_26","scaffold_27","scaffold_28","scaffold_29"))
+#make tidy
+tidymds<-mds %>% gather(MDS, Value, 3:6)
+MDS1<-filter(tidymds, MDS=="MDS1") %>% rename(MDS1=MDS) %>% rename(Value1=Value)
+MDS2<-filter(tidymds, MDS=="MDS2") %>% rename(MDS2=MDS) %>% rename(Value2=Value)
+MDS3<-filter(tidymds, MDS=="MDS3") %>% rename(MDS3=MDS) %>% rename(Value3=Value)
+MDS4<-filter(tidymds, MDS=="MDS4") %>% rename(MDS4=MDS) %>% rename(Value4=Value)
+ggplot(mds)+
+  geom_point(aes(x=MDS1, y=MDS2, fill=chrom), pch=21, alpha=0.75) +
+  scale_fill_viridis_d(option="magma") +
+  theme_bw() +
+  theme(legend.position = 'none')
+ggsave("outputs/300/mds1.jpeg")
+
+ggplot(mds)+
+  geom_point(aes(x=MDS1, y=MDS3, fill=chrom), pch=21, alpha=0.75) +
+  scale_fill_viridis_d(option="magma") +
+  theme_bw() +
+  theme(legend.position = 'none')
+
+
+ggplot(mds)+
+  geom_point(aes(x=MDS1, y=MDS4, fill=chrom), pch=21, alpha=0.75) +
+  scale_fill_viridis_d(option="magma") +
+  theme_bw() +
+  theme(legend.position = 'none')
+```
+
+
+### MDS1
+
+```{r}
+p1<-MDS1 %>% arrange(chrom,window) %>%mutate(Index=1:n())
+
+out <- boxplot.stats(p1$Value1)$out
+out_ind <- which(p1$Value1 %in% c(out))
+length(out_ind)
+outliers<-p1[out_ind,]
+outliers %>% group_by(chrom) %>% summarize(Count=n()) %>% arrange(-Count)
+```
+
+```{r}
+#places to put labels based on index
+chroms<-p1 %>% group_by(chrom) %>% mutate(Start=min(Index), Stop=max(Index)) %>% select(chrom,Start,Stop) %>% unique() %>% 
+  mutate(Position=round((Start+Stop)/2))
+
+#Make enough colors
+nb.cols <- nrow(chroms)
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+
+ggplot(p1) +
+  geom_rect(data=chroms, aes(xmin=Start, xmax=Stop, ymin=min(p1$Value1), ymax=max(p1$Value1)), fill=mycolors, alpha=0.25) +
+  geom_point(data=p1, aes(x=Index, y=Value1, color=chrom), alpha=0.75, cex=0.5) +
+  geom_point(data=outliers, aes(x=Index, y=Value1), color="black", cex=0.5) +
+  theme_bw() +
+  scale_x_continuous(breaks=chroms$Position, labels=chroms$chrom) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=6)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  ylab("MDS1") +
+  xlab("Chromosome")
+```
+
+
+### MDS2
+```{r}
+p2<-MDS2 %>% arrange(chrom,window) %>% mutate(Index=1:n())
+out2 <- boxplot.stats(p2$Value2)$out
+out_ind2 <- which(p2$Value2 %in% c(out2))
+length(out_ind2)
+outliers2<-p2[out_ind2,]
+outliers2 %>% group_by(chrom) %>% summarize(Count=n()) %>% arrange(-Count)
+```
+
+
+```{r}
+chroms<-p2 %>% group_by(chrom) %>% mutate(Start=min(Index), Stop=max(Index)) %>% select(chrom,Start,Stop) %>% unique() %>% 
+  mutate(Position=round((Start+Stop)/2))
+
+#Make enough colors
+nb.cols <- nrow(chroms)
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+
+ggplot(p2) +
+  geom_rect(data=chroms, aes(xmin=Start, xmax=Stop, ymin=min(p2$Value2), ymax=max(p2$Value2)), fill=mycolors, alpha=0.25) +
+  geom_point(data=p2, aes(x=Index, y=Value2, color=chrom), alpha=0.75, cex=0.5) +
+  geom_point(data=outliers2, aes(x=Index, y=Value2), color="black", cex=0.5) +
+  theme_bw() +
+  scale_x_continuous(breaks=chroms$Position, labels=chroms$chrom) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=6)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  ylab("MDS2") +
+  xlab("Chromosome")
+```
+
+
+### MDS3
+```{r}
+p3<-MDS3  %>% arrange(chrom,window) %>% mutate(Index=1:n())
+
+out3 <- boxplot.stats(p3$Value3)$out
+out_ind3 <- which(p3$Value3 %in% c(out3))
+out_ind3
+outliers3<-p3[out_ind3,]
+outliers3 %>% group_by(chrom) %>% summarize(Count=n()) %>% arrange(-Count)
+```
+```{r}
+#places to put labels based on index
+chroms<-p3 %>% group_by(chrom) %>% mutate(Start=min(Index), Stop=max(Index)) %>% select(chrom,Start,Stop) %>% unique() %>% 
+  mutate(Position=round((Start+Stop)/2))
+
+
+#Make enough colors
+nb.cols <- nrow(chroms)
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
+
+
+ggplot(p3) +
+  geom_rect(data=chroms, aes(xmin=Start, xmax=Stop, ymin=min(p3$Value3), ymax=max(p3$Value3)), fill=mycolors, alpha=0.25) +
+  geom_point(data=p3, aes(x=Index, y=Value3, color=chrom), alpha=0.75, cex=0.5) +
+  geom_point(data=outliers3, aes(x=Index, y=Value3), color="black", cex=0.5) +
+  theme_bw() +
+  scale_x_continuous(breaks=chroms$Position, labels=chroms$chrom) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=6)) +
+  theme(legend.title = element_blank()) +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_color_manual(values=mycolors) +
+  ylab("MDS3") +
+  xlab("Chromosome")
+```
+
+## Make phylo
 
 outputs/300/plink-pruned.vcf.gz
 

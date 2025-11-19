@@ -1,0 +1,80 @@
+---
+title: "302-lfs-genomic-subtraction"
+output: html_document
+date: "2025-11-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+## Genomic subtraction
+
+_1_ Identify the highest coverage 10 females and 10 males (and omit ones Mac finds suspicious)
+_2_ Extract unaligned sequences from males/females
+
+
+```{r, eval=FALSE}
+topc %>% ungroup() %>% mutate(Command=paste0("samtools view -b -f 12 /home/maccamp/longfin-histories/data/sub/",Sample,".sort.bam > ",
+                              "/home/maccamp/longfin-histories/data/unmapped/",Sample,".bam; samtools collate -u -O /home/maccamp/longfin-histories/data/unmapped/",Sample,".bam | samtools fastq -1 /home/maccamp/longfin-histories/data/unmapped/",Sample,"-r1.fastq -2 /home/maccamp/longfin-histories/data/unmapped/",Sample,"-r2.fastq")) %>%
+  select(Command) %>% write_tsv("212.1-unmapped-commands.tsv", col_names = FALSE)
+
+topc %>% ungroup() %>% mutate(Command=paste0("flash data/unmapped/",Sample,"-r1.fastq  data/unmapped/",Sample,"-r2.fastq -o data/unmapped/",Sample,"-flash --max-overlap 120 --min-overlap 20"))  %>%
+  select(Command) %>% write_tsv("212.2-flash.tsv", col_names = FALSE)
+
+                              
+```
+
+``{sh, eval=FALSE}
+#on farm in ~/longfin-histories
+bash 212.2-flash.tsv
+```
+
+_3_ De novo asssemble unaligned male data, SPADES
+
+
+then run something like this:
+```{sh, eval=FALSE}
+srun -p bigmemm -t 48:00:00 --mem=256GB --nodes=1 --cpus-per-task=6 spades.py --phred-offset 33 -1 data/unmapped/110381-r1.fastq -2 data/unmapped/110381-r2.fastq -o data/unmapped/110381 > data/unmapped/110381.out 2> data/unmapped/110381.err & 
+
+#Spades with unpaired
+srun -p bigmemm -t 48:00:00 --mem=256GB --nodes=1 --cpus-per-task=6 spades.py --phred-offset 33 -1 data/unmapped/110381-flash.notCombined_1.fastq -2 data/unmapped/110381-flash.notCombined_2.fastq --merged data/unmapped/110381-flash.extendedFrags.fastq -o data/unmapped/110381-flash > data/unmapped/110381-flash.out 2> data/unmapped/110381-flash.err & 
+````
+
+
+combine, then assemble our candidate males
+
+```{sh, eval=FALSE}
+cat 600232-flash.notCombined_1.fastq 901522-flash.notCombined_1.fastq 901232-flash.notCombined_1.fastq 120092-flash.notCombined_1.fastq > male-r1.fastq
+cat 600232-flash.notCombined_2.fastq 901522-flash.notCombined_2.fastq 901232-flash.notCombined_2.fastq 120092-flash.notCombined_2.fastq > male-r2.fastq
+cat 600232-flash.extendedFrags.fastq 901522-flash.extendedFrags.fastq 901232-flash.extendedFrags.fastq 120092-flash.extendedFrags.fastq > male-extended.fastq
+```
+
+```{sh, eval=FALSE}
+#Spades with unpaired
+conda activate spades
+srun -p bigmemm -t 48:00:00 --mem=256GB --nodes=1 --cpus-per-task=6 spades.py --phred-offset 33 -1 data/unmapped/male-r1.fastq -2 data/unmapped/male-r2.fastq --merged data/unmapped/male-extended.fastq -o data/unmapped/male-flash > data/unmapped/male-flash.out 2> data/unmapped/male-flash.err & 
+````
+
+
+
+bash ../../101.2-do-align.sh to-align.txt /home/maccamp/longfin-histories/data/male-flash/scaffolds.fasta
+
+
+```{sh, eval=FALSE}
+samtools view -q 10 120092-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "120092",$1,$2,$3,$4}' > 120092-sort.stats
+samtools view -q 10 600232-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "600232",$1,$2,$3,$4}' > 600232-sort.stats
+samtools view -q 10 901522-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "901522",$1,$2,$3,$4}' > 901522-sort.stats
+samtools view -q 10 901232-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "901232",$1,$2,$3,$4}' > 901232-sort.stats
+
+samtools view -q 10 400281-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "400281",$1,$2,$3,$4}' > 400281-sort.stats
+samtools view -q 10 401261-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "401261",$1,$2,$3,$4}' > 401261-sort.stats
+samtools view -q 10 500131-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "500131",$1,$2,$3,$4}' > 500131-sort.stats
+samtools view -q 10 701331-realign.sort.bam -b| samtools idxstats - | grep -v "*" | awk '{print "701331",$1,$2,$3,$4}' > 701331-sort.stats
+
+
+```

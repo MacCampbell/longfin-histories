@@ -413,8 +413,6 @@ ggsave(paste0("outputs/200/chrom-pcs/",chrom,".pdf"))
 lapply(files, plotPCA)
 ```
 
-
-## Pruned .vcf as phylogeny?
-
+#
 
 

@@ -161,10 +161,16 @@ m92 %>% filter(SexChar=="Male") %>% select(Sample) %>% write_tsv("bamlists/92-ma
  -minMapQ 20 -minQ 20 \
  -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/213/asso-75 \
  -bam $HOME/longfin-histories/bamlists/92.bamlist  > outputs/213/asso-75.out 2> outputs/213/asso-75.err &
+ 
+ srun -t 48:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 72 -bam $HOME/longfin-histories/bamlists/92.bamlist -ref /home/maccamp/genomes/hypomesus-curated/fHypTra1.pri.cur.20251017.fasta  \
+-out outputs/213/snps-05 \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/213/snps-05.out 2> outputs/213/snps-05.err &
 ```
 
 ```{r}
-files = list.files(path="outputs/212/", pattern="*75.lrt0.gz", full.names = TRUE)
+files = list.files(path="outputs/213/", pattern="*75.lrt0.gz", full.names = TRUE)
 list = lapply(files, read_tsv)
 data<-bind_rows(list)
 ```

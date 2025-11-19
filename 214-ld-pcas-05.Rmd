@@ -54,6 +54,7 @@ ggplot(mds)+
   theme_bw() +
   theme(legend.position = 'none')
 
+ggsave("outputs/214/MDS1-scatter.jpeg")
 
 ggplot(mds)+
   geom_point(aes(x=MDS1, y=MDS3, fill=chrom), pch=21, alpha=0.75) +
@@ -104,6 +105,8 @@ ggplot(p1) +
   scale_color_manual(values=mycolors) +
   ylab("MDS1") +
   xlab("Chromosome")
+
+ggsave("outputs/214/MDS1.jpeg")
 ```
 
 
@@ -139,6 +142,9 @@ ggplot(p2) +
   scale_color_manual(values=mycolors) +
   ylab("MDS2") +
   xlab("Chromosome")
+
+ggsave("outputs/214/MDS2.jpeg")
+
 ```
 
 
