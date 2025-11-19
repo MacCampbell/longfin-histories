@@ -85,6 +85,10 @@ m200 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/46.bamlist
 m300<-gdf %>% filter(Dedup > 3e5)
 m300 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/40.bamlist")
 #Six more fish here
+
+m500<-gdf %>% filter(Dedup > 5e5)
+m500 %>% select(Path) %>% write_tsv(col_names = FALSE, file="bamlists/33.bamlist")
+
 ```
 
 
@@ -255,6 +259,16 @@ tabix plink.vcf.gz
 module load bcftools
 bcftools +fill-tags plink.vcf.gz | bcftools view -i 'F_MISSING < 0.10' | bcftools view -i 'INFO/MAF > 0.01' > filtered.vcf
 bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered.vcf > plink-pruned.vcf
+
+#redoing with 33 bamlist (5e5 reads)
+
+srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 30 -bam bamlists/33.bamlist -ref /home/maccamp/genomes/longfin-chrom/lfs_final_scaff_assembly.fasta \
+-out outputs/200/snps-wgs-5  \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/200/snps-5.out 2> outputs/200/snps-5.err &
+
+#can't because ref is gone. Do I need this? whatever, redoing in 303
 ```
 	
 
