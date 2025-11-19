@@ -81,10 +81,6 @@ ggplot(ggf) +
 ggplot(ggf %>% filter(Dedup > 5e5)) +
   geom_histogram(aes(x=Dedup)) 
 ```
-```{r}
-m33<-ggf %>% filter(Dedup > 5e5)
-m27<-ggf %>% filter(Dedup > 1e6)
-```
 
 Need to downsample
 
@@ -102,21 +98,24 @@ downsample %>% select(ReductionCommand) %>% write_csv("303.1-downsample.sh", col
 ```{sh, eval=FALSE}
 module load parallel
 srun -p high -t 02:00:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 parallel -j 10  < 303.1-downsample.sh > outputs/303/downsample.stdout 2> outputs/303/downsample.stderr
+#index .bams
+for f in *.bam; do samtools index $f; done;
+```
+
 
 ## Create bamlists
 e.g.
+
+
 ```{r}
-s144<-sag %>% filter(Dedup > 5e5)
-s144 %>% select(Path) %>% write_tsv("bamlists/s144.bamlist", col_names = FALSE)
-s144 %>% select(ID) %>% write_tsv("bamlists/s144.names", col_names = FALSE)
+m33<-ggf2 %>% filter(Dedup > 5e5)
+m27<-ggf2 %>% filter(Dedup > 1e6)
 
-s144$Pop<-factor(s144$Pop, levels=c("ALVS","CHPI","SFBY","PETA","SUIB","HUMB","COLR","LWSH","PTLC","HRLC","SKNA","YBAK"))
+m33 %>% select(NewPath) %>% write_tsv("bamlists/m33.bamlist", col_names = FALSE)
+m33 %>% select(SampleID) %>% write_tsv("bamlists/m33.names", col_names = FALSE)
 
-
-s72 %>% select(Path) %>% write_tsv("bamlists/s72.bamlist", col_names = FALSE)
-s72 %>% select(ID) %>% write_tsv("bamlists/s72.names", col_names = FALSE)
-
-s72$Pop<-factor(s72$Pop, levels=c("ALVS","CHPI","SFBY","PETA","SUIB","HUMB","COLR","LWSH","PTLC","HRLC","SKNA","YBAK"))
+m27 %>% select(NewPath) %>% write_tsv("bamlists/m27.bamlist", col_names = FALSE)
+m27 %>% select(SampleID) %>% write_tsv("bamlists/m27.names", col_names = FALSE)
 
 ```
 
@@ -125,14 +124,14 @@ s72$Pop<-factor(s72$Pop, levels=c("ALVS","CHPI","SFBY","PETA","SUIB","HUMB","COL
 
 ```{sh, eval=FALSE}
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 130 -bam bamlists/s144.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-minInd 30 -bam bamlists/m33.bamlists -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
 -rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
 -out outputs/303/snps-wgs  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/303/snps.out 2> outputs/303/snps.err &
 
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 65 -bam bamlists/s72.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-minInd 24 -bam bamlists/m27.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
 -rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
 -out outputs/303/snps-wgs-1m  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
