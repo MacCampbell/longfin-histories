@@ -12,24 +12,17 @@ Get San Francisco Bay samples, seee 300
 
 ```{r}
 sfb<-read_csv("meta/sfb.csv")
-sfb
-```
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+sfb %>% select(ID) %>% write_tsv("bamlists/26.names", col_names = FALSE)
+sfb %>% select(Path) %>% write_tsv("bamlists/26.bamlist", col_names = FALSE)
 ```
 
-## Including Plots
+26 samples
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{sh, eval=FALSE}
+srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 23 -bam bamlists/26.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
+-out outputs/304/snps-wgs  \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/304/snps.out 2> outputs/304/snps.err &
 ```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -115,6 +115,10 @@ m33 %>% select(SampleID) %>% write_tsv("bamlists/m33.names", col_names = FALSE)
 m27 %>% select(NewPath) %>% write_tsv("bamlists/m27.bamlist", col_names = FALSE)
 m27 %>% select(SampleID) %>% write_tsv("bamlists/m27.names", col_names = FALSE)
 
+#no downsample
+m33 %>% select(Path) %>% write_tsv("bamlists/33.bamlist", col_names = FALSE)
+m27 %>% select(Path) %>% write_tsv("bamlists/27.bamlist", col_names = FALSE)
+
 ```
 
 
@@ -122,14 +126,14 @@ m27 %>% select(SampleID) %>% write_tsv("bamlists/m27.names", col_names = FALSE)
 
 ```{sh, eval=FALSE}
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 29 -bam bamlists/m33.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-minInd 30 -bam bamlists/33.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
 -rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
 -out outputs/303/snps-wgs  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/303/snps.out 2> outputs/303/snps.err &
 
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 23 -bam bamlists/m27.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-minInd 24 -bam bamlists/27.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
 -rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
 -out outputs/303/snps-wgs-1m  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
@@ -212,7 +216,7 @@ lapply(files, plotLd)
 
 
 ```{r}
-lc<-read.delim("outputs/303/vcfs/lcl|scaffold_26.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.3)
+lc<-read.delim("outputs/303/vcfs/lcl|scaffold_26.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.)
 
   ggplot(lc) +
   geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
