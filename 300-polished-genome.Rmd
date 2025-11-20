@@ -63,6 +63,11 @@ s72 %>% select(ID) %>% write_tsv("bamlists/s72.names", col_names = FALSE)
 
 s72$Pop<-factor(s72$Pop, levels=c("ALVS","CHPI","SFBY","PETA","SUIB","HUMB","COLR","LWSH","PTLC","HRLC","SKNA","YBAK"))
 
+#26 fish
+sfb<-s72 %>% filter(Pop %in% c("ALVS","CHPI","SFBY","PETA","SUIB"))
+
+write_csv(sfb, file="meta/sfb.csv")
+
 ```
 
 ```{sh, eval=FALSE}

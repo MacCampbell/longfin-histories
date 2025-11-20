@@ -58,7 +58,7 @@ module load sratoolkit
 for f in SRR*lite.1; do echo fastq-dump --outdir ./ --skip-technical --read-filter pass --dumpbase --split-3 --gzip --clip $f >> split-commands.sh; done;
 
 module load parallel
-srun -p high -t 02:00:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 parallel -j 10 < split-commands.sh  
+srun -p high -t 12:00:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=11 parallel -j 11 < split-commands.sh  
 
 ```
 
@@ -122,14 +122,14 @@ m27 %>% select(SampleID) %>% write_tsv("bamlists/m27.names", col_names = FALSE)
 
 ```{sh, eval=FALSE}
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 30 -bam bamlists/m33.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-minInd 29 -bam bamlists/m33.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
 -rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
 -out outputs/303/snps-wgs  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/303/snps.out 2> outputs/303/snps.err &
 
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 24 -bam bamlists/m27.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-minInd 23 -bam bamlists/m27.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
 -rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
 -out outputs/303/snps-wgs-1m  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
@@ -162,18 +162,28 @@ bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode maxAF f
 ```
 
 
-16195 variants and 33 people pass filters and QC.
-31954 variants and 27 people pass filters and QC.
+16195 variants and 33 people pass filters and QC with downsampling from 1.5e6
+31954 variants and 27 people pass filters and QC with downsampling from 1.5e6
 
+18198 variants and 33 people pass filters and QC with downsampling from 2e6
+38008 variants and 27 people pass filters and QC with downsampling from 2e6 (30920 in filtered file)
+
+Using minInd 29 and minInd 23
+23610
+44264
 
 ## LD
 
 ```{sh, eval=FALSE}
 
-#cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/303/filtered.vcf.gz > outputs/303/vcfs/$line.vcf; done;
+cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/303/filtered.vcf.gz > outputs/303/vcfs/$line.vcf; done;
+bcftools view  outputs/303/filtered.vcf.gz  -r 'lcl|scaffold_26':8.25e6- > outputs/303/vcfs/26-region-1m.vcf
 
 cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/303/filtered-1m.vcf.gz > outputs/303/vcfs/$line.vcf; done;
 bcftools view  outputs/303/filtered-1m.vcf.gz  -r 'lcl|scaffold_26':8.25e6- > outputs/303/vcfs/26-region-1m.vcf
+
+cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/303/plink-renamed-1m.vcf.gz > outputs/303/vcfs/$line.vcf; done;
+bcftools view  outputs/303/plink-renamed-1m.vcf.gz  -r 'lcl|scaffold_26':8.25e6- > outputs/303/vcfs/26-region-1m.vcf
 
 for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basename $f vcf`ldf --allow-extra-chr --double-id; done;
 
@@ -185,7 +195,7 @@ files<-list.files("outputs/303/vcfs",pattern = "*.ldf.ld", full.names = TRUE)
 plotLd<-function(file) {
   chrom<-gsub("outputs/303/vcfs/","",file)
   chrom<-gsub(".ldf.ld","", chrom)
-  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.6)
+  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.3)
 
   ggplot(lc) +
   geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
@@ -202,7 +212,7 @@ lapply(files, plotLd)
 
 
 ```{r}
-lc<-read.delim("outputs/303/vcfs/lcl|scaffold_26.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.5)
+lc<-read.delim("outputs/303/vcfs/lcl|scaffold_26.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.3)
 
   ggplot(lc) +
   geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
@@ -233,7 +243,7 @@ bcftools view lcl\|scaffold_26.vcf.gz -r 'lcl|scaffold_26':8.25e6- > linkage-26.
 ```{r}
 vcf<-read.vcfR(file="outputs/303/vcfs/26-region-1m.vcf")
 genind<-vcfR2genind(vcf)
-genind@pop<-as.factor(s144$Pop)
+genind@pop<-as.factor(m33$Pop)
 ```
 
 
@@ -300,7 +310,7 @@ annot
 
 ```{r}
 as.ggplot(pheatmap(m, annotation_col = annot, cluster_rows = FALSE,
-                   labels_col = s144$ID, labels_row = ddf2$X2, fontsize_row = 14, fontsize_col = 9)) +
+                   labels_col = m27$SampleID, labels_row = ddf2$X2, fontsize_row = 14, fontsize_col = 9)) +
   ggtitle("Heatmap of Longfin Smelt Variants on scaffold_26\n") + 
   theme(plot.title = element_text(hjust=0.5))
 ggsave("outputs/303/lfs-sex-heatmap-1m.pdf", width=20, height=12)
@@ -311,6 +321,8 @@ ggsave("outputs/303/lfs-sex-heatmap-1m.pdf", width=20, height=12)
 ```{r, eval=FALSE}
 files<-list.files("outputs/303/vcfs",pattern = "*.vcf", full.names = TRUE)
 m27$Pop<-m27$clust_name_100
+m33$Pop<-m33$clust_name_100
+
 plotPCA<-function(file) {
   meta<-m27
   chrom<-gsub("outputs/303/vcfs/","",file)
@@ -353,7 +365,7 @@ lapply(files, plotPCA)
 ```{sh, eval=FALSE}
 
  gunzip -c filtered-1m.vcf.gz | perl -pe 's/lcl\|//g' > filtered-1m-lcl.vcf
-bgzip, tabix
+bgzip, tabixr
 cat 1mbseqs.txt | perl -pe 's/lcl\|//g' > 1mbseqs-lcl.txt
 
 cat outputs/300/1mbseqs-lcl.txt  | while read line; do bcftools view -Ob -r $line outputs/303/filtered-1m-lcl.vcf.gz  > outputs/303/bcfs/$line.bcf; done;
