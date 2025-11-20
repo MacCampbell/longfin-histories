@@ -176,6 +176,10 @@ Using minInd 29 and minInd 23
 23610
 44264
 
+Not downsampling
+minind 30, 19150 SNPs
+minidn 24  42275 SNPs
+
 ## LD
 
 ```{sh, eval=FALSE}
@@ -320,6 +324,54 @@ as.ggplot(pheatmap(m, annotation_col = annot, cluster_rows = FALSE,
 ggsave("outputs/303/lfs-sex-heatmap-1m.pdf", width=20, height=12)
 ```
 
+
+```{r}
+ddf<-read_tsv("outputs/303/snps-wgs-1m.geno.gz", col_names = c("FALSE")) %>% select(-X30)
+ddf[ddf==-1]<-NA
+ddf<-ddf %>% filter(`FALSE`=="lcl|scaffold_11")
+ddf2<-ddf %>% filter(X2 > 20e6)
+#ddf2 <- ddf2 %>% filter(X2==20131490)
+m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
+```
+
+```{r}
+pheatmap(m, labels_row = ddf2$X2, labels_col = m27$clust_name_100, cluster_cols = TRUE, cluster_rows = FALSE)
+```
+20131490
+```{r}
+dlong<-ddf2 %>% filter(X2==20131490) %>% pivot_longer(cols = 3:29) %>% rename(Scaffold="FALSE")
+dlong$name<-m27$SampleID
+dlong$Pheno<-m27$clust_name_100
+dlong %>% group_by(Pheno, value) %>% summarize(Count=n())
+```
+Frequency in HS fish, Type 1: 93% (n=6)
+Frequency in MS fish, Type 1: 67 (n=6)
+Frequency in LS fish, Type 1: 50% (n=10)
+
+
+##GWAS Redo?
+
+```{r}
+m34<-ggf %>% filter(clust_name_100 %in% c("HS","LS")) %>% filter(Dedup > 2e5)
+m34$ybin<-gsub("LS",0,m34$clust_name_100)
+m34$ybin<-gsub("HS",1,m34$ybin)
+
+m34 %>% select(Path) %>% write_tsv("bamlists/34.bamlist", col_names = FALSE)
+m34 %>% select(ybin) %>% write_tsv("bamlists/34.pheno", col_names = FALSE)
+
+```
+
+```{sh, eval=FALSE}
+ srun -p high -t 8:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
+ $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/34.pheno \
+ -GL 1 -nThreads 12 -minInd 17 \
+ -minMapQ 20 -minQ 20 -minMaf 0.10 \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/303/do-asso \
+  -bam bamlists/34.bamlist > outputs/303/do-asso.out 2> outputs/303/do-asso.err &
+
+```
+
+
 #Chrom PCS
 
 ```{r, eval=FALSE}
@@ -368,8 +420,8 @@ lapply(files, plotPCA)
 
 ```{sh, eval=FALSE}
 
- gunzip -c filtered-1m.vcf.gz | perl -pe 's/lcl\|//g' > filtered-1m-lcl.vcf
-bgzip, tabixr
+gunzip -c filtered-1m.vcf.gz | perl -pe 's/lcl\|//g' > filtered-1m-lcl.vcf
+bgzip, tabix
 cat 1mbseqs.txt | perl -pe 's/lcl\|//g' > 1mbseqs-lcl.txt
 
 cat outputs/300/1mbseqs-lcl.txt  | while read line; do bcftools view -Ob -r $line outputs/303/filtered-1m-lcl.vcf.gz  > outputs/303/bcfs/$line.bcf; done;

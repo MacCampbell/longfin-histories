@@ -313,6 +313,7 @@ cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line ou
 
 cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/300/filtered-1m.vcf.gz > outputs/300/vcfs/$line.vcf; done;
 bcftools view  outputs/300/filtered-1m.vcf.gz  -r 'lcl|scaffold_26':8.25e6- > outputs/300/vcfs/26-region-1m.vcf
+bcftools view  outputs/300/filtered-1m.vcf.gz  -r 'lcl|scaffold_11':17e6- > outputs/300/vcfs/11-region-1m.vcf
 
 for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basename $f vcf`ldf --allow-extra-chr --double-id; done;
 
@@ -437,10 +438,29 @@ annot
 
 ```{r}
 as.ggplot(pheatmap(m, annotation_col = annot, cluster_rows = FALSE,
-                   labels_col = s144$ID, labels_row = ddf2$X2, fontsize_row = 14, fontsize_col = 9)) +
+                   labels_col = s72$ID, labels_row = ddf2$X2, fontsize_row = 14, fontsize_col = 9)) +
   ggtitle("Heatmap of Longfin Smelt Variants on scaffold_26\n") + 
   theme(plot.title = element_text(hjust=0.5))
 ggsave("outputs/300/lfs-sex-heatmap-1m.pdf", width=20, height=12)
+```
+
+Chrom 11
+
+Scaffold 11
+
+```{r}
+ddf<-read_tsv("outputs/300/snps-wgs-1m.geno.gz", col_names = c("FALSE")) %>% select(-X75)
+ddf[ddf==-1]<-NA
+ddf<-ddf %>% filter(`FALSE`=="lcl|scaffold_11")
+ddf2<-ddf %>% filter(X2 > 20e6)
+m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
+```
+
+```{r}
+as.ggplot(pheatmap(m, labels_row = ddf2$X2, labels_col = s72$ID,fontsize_row = 14, fontsize_col = 9)) +
+  ggtitle("Heatmap of Longfin Smelt Variants on scaffold_11\n") + 
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/300/lfs-11-heatmap-1m.pdf", width=20, height=12)
 ```
 
 #Chrom PCS
