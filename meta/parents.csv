@@ -1,0 +1,11 @@
+﻿Pop,SampleID,Sex,Aligned,Dedup,Cov,Path,Category,clust_name_100
+Hatchery,SRR35397523,Female,,,,data/parents/SRR35397523.sort.flt.bam,Hatchery,UNK
+Hatchery,SRR35397524,Male,,,,data/parents/SRR35397524.sort.flt.bam,Hatchery,UNK
+Hatchery,SRR35397548,Female,,,,data/parents/SRR35397548.sort.flt.bam,Hatchery,UNK
+Hatchery,SRR35397549,Male,,,,data/parents/SRR35397549.sort.flt.bam,Hatchery,UNK
+Hatchery,SRR35397572,Female,,,,data/parents/SRR35397572.sort.flt.bam,Hatchery,UNK
+Hatchery,SRR35397573,Male,,,,data/parents/SRR35397573.sort.flt.bam,Hatchery,UNK
+Hatchery,SRR35397582,Female,,,,data/parents/SRR35397582.sort.flt.bam,Hatchery,UNK
+Hatchery,SRR35397583,Male,,,,data/parents/SRR35397583.sort.flt.bam,Hatchery,UNK
+Hatchery,SRR35397610,Female,,,,data/parents/SRR35397610.sort.flt.bam,Hatchery,UNK
+Hatchery,SRR35397627,Male,,,,data/parents/SRR35397627.sort.flt.bam,Hatchery,UNK

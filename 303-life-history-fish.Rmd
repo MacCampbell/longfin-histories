@@ -70,6 +70,8 @@ cat *stats > alt-parents.csv
 ```{r}
 gf<-read_csv("meta/alt-polish-stat.csv", col_names = c("SampleID","Aligned","Dedup","Cov"))
 ggf<-left_join(gf,fish) %>% mutate(Path=paste0("data/alt-polish/",SampleID,".sort.flt.bam"))
+
+write_csv(ggf, file="meta/life-history-fish.csv")
 ggf
 ```
 
@@ -473,7 +475,39 @@ pc12
 ggsave("outputs/303/scaffold-11-region-pca.jpeg")
 ```
 
-##GWAS Redo?
+### low coverage version 
+
+```{r}
+#ddf<-read_tsv("outputs/303/snps-wgs-1m.geno.gz", col_names = c("FALSE")) %>% select(-X30)
+ddf<-read_tsv("outputs/303/snps-wgs-50.geno.gz", col_names = c("FALSE")) %>% select(-X49)
+
+ddf[ddf==-1]<-NA
+ddf<-ddf %>% filter(`FALSE`=="lcl|scaffold_11")
+ddf2<-ddf %>% filter(X2 > 18e6)
+#ddf2 <- ddf2 %>% filter(X2 %in% c(20131490,19141028,20144334,18678189,18850381,18776806,18519985,18611077))
+ddf2 <- ddf2 %>% filter(X2 %in% c(20131490,20144334,20263784,20263889,20263756,20263652))
+
+m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
+
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Pheno<-m46$clust_name_100
+#annot$Pheno<-gsub("FW","LS",annot$Pheno)
+#annot$Pheno<-gsub("MS","HS",annot$Pheno)
+
+```
+
+```{r}
+as.ggplot(pheatmap(m, annotation_col = annot, labels_row = ddf2$X2, labels_col = m46$clust_name_100, cluster_cols = FALSE, cluster_rows = FALSE)) +
+    ggtitle("Heatmap of Longfin Smelt Variants on scaffold 11\n") + 
+  theme(plot.title = element_text(hjust=0.5))
+
+ggsave("outputs/303/lfs-11-heatmap-low-coverage.pdf", width=12, height=8)
+
+```
+
+in other fish, 201313490 and 20144334 are in complete linkage. SO they aren't here with the low coverage fish and that's ok.
+# GWAS Redo?
 
 ```{r}
 m34<-ggf %>% filter(clust_name_100 %in% c("HS","LS")) %>% filter(Dedup > 2e5)

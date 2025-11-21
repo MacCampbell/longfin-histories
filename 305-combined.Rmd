@@ -1,0 +1,68 @@
+---
+title: "305-combined"
+output: html_document
+date: "2025-11-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+
+```{r}
+library(ape)
+library(tidyverse)
+library(ggpubr)
+library(ggrepel)
+library(ggplotify)
+library(snpR)
+library(ggtree)
+library(tanggle)
+library(pheatmap)
+```
+
+Combine life history fish, SFB fish and parents
+
+```{r}
+lfs<-read_csv("meta/life-history-fish.csv") %>% mutate(Category="Life History") %>% mutate(Pop="Life History") %>% mutate(Sex="UNK") %>% select(Pop, SampleID, Aligned, Dedup, Cov, clust_name_100, Category, Path, Sex)
+sfb<-read_csv("meta/sfb.csv") %>% rename(Aligned=Reads, SampleID=ID) %>% mutate(Category="Saglam") %>% mutate(clust_name_100="UNK") %>% mutate(Sex="UNK")
+parents<-read_csv("meta/parents.csv")
+
+
+bind_rows(lfs,sfb,parents) %>% filter(Dedup > 1e6) %>% mutate(Total=n()) %>% group_by(Category, clust_name_100, Sex, Total) %>% summarize(Count=n()) %>% relocate(-Total)
+
+m1<-bind_rows(lfs,sfb,parents) %>% filter(Dedup > 1e6)
+m1 %>% select(Path) %>% write_tsv("bamlists/combined.bamlist", col_names = FALSE)
+m1 %>% select(SampleID) %>% write_tsv("bamlists/combined.names", col_names = FALSE)
+
+```
+
+
+
+Trying 85% threshold first, want scaffold_11:20131490
+-rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
+
+```{sh, eval=FALSE}
+srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 45 -bam bamlists/combined.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-rf /home/maccamp/genomes/longfin-polished/scaffold1126.txt \
+-out outputs/305/snps-wgs  \
+-minMaf 0.01 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/305/snps.out 2> outputs/305/snps.err &
+```
+
+
+Create VCF
+
+```{sh, eval=FALSE}
+plink --tped snps-wgs.tped --tfam snps-wgs.tfam  --out plink-binary --recode --allow-extra-chr --noweb
+plink --ped plink-binary.ped --map plink-binary.map --recode vcf --allow-extra-chr -out plink
+
+module load bcftools
+bcftools reheader -s ../../bamlists/26.names -o plink-renamed.vcf plink.vcf
+bcftools +fill-tags plink-renamed.vcf | bcftools view -i 'F_MISSING < 0.10' | bcftools view -i 'INFO/MAF > 0.01' > filtered.vcf
+bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered.vcf > plink-pruned.vcf
+bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode maxAF filtered.vcf > plink-pruned-max.vcf
+bgzip filtered.vcf
+```
+
