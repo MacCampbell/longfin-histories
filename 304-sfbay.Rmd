@@ -113,7 +113,7 @@ lc<-read.delim("outputs/304/vcfs/lcl|scaffold_11.ldf.ld",sep="",stringsAsFactors
 
 
 ```{r}
-lc2<-lc %>% filter(BP_A > 18e6)
+lc2<-lc %>% filter(BP_A > 17e6)
 
 ggplot(lc2) +
   geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
@@ -207,7 +207,7 @@ Scaffold 11
 ddf<-read_tsv("outputs/304/snps-wgs.geno.gz", col_names = c("FALSE")) %>% select(-X29)
 ddf[ddf==-1]<-NA
 ddf<-ddf %>% filter(`FALSE`=="lcl|scaffold_11")
-ddf2<-ddf %>% filter(X2 > 20e6)
+ddf2<-ddf %>% filter(X2 > 17e6)
 m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
 ```
 
@@ -219,6 +219,61 @@ as.ggplot(pheatmap(m, labels_row = ddf2$X2, labels_col = sfb$ID,fontsize_row = 1
 ggsave("outputs/304/lfs-11-heatmap.pdf", width=20, height=12)
 
 ```
+
+
+```{r}
+vcf<-read.vcfR(file="outputs/304/vcfs/11-region-1m.vcf")
+genind<-vcfR2genind(vcf)
+genind@pop<-as.factor(sfb$Pop)
+```
+
+
+```{r}
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(sfb)
+
+eig<-pca1$eig/sum(pca1$eig)*100
+```
+
+```{r}
+df<-df %>% mutate(Genotype=ifelse(Axis1 >2, "RHom", ifelse(Axis1 > 0 & Axis1 < 2, "Het","AHom" )))
+df %>% group_by(Genotype, Pop) %>% summarize(Count=n())
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=Genotype), alpha=0.75, cex=2, pch=21) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="H") +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") 
+pc12
+ggsave("outputs/304/scaffold-11-region-pca.jpeg")
+```
+
+
+
+```{r}
+loadings<-pca1$c1 %>% as_tibble()
+loadings$Allele<-rownames(pca1$c1) 
+
+loadings
+loadings$Position<-gsub("lcl\\|.*_|\\.\\d$","",loadings$Allele)
+loadings$Position<-as.numeric(loadings$Position)
+loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .3) %>% select(-CS2, -CS3) %>% 
+  mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
+
+tops %>% relocate(Chrom, Position, CS1)
+
+```
+
+Heterozygosity?
 
 #Chrom PCS
 
