@@ -306,7 +306,6 @@ ggsave("outputs/300/scree.jpeg")
 ```
 
 ## LD
-
 ```{sh, eval=FALSE}
 
 cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/300/filtered.vcf.gz > outputs/300/vcfs/$line.vcf; done;
