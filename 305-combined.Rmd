@@ -33,10 +33,10 @@ sag<-sag %>% rename(Aligned=Reads, SampleID=ID) %>% mutate(Category="Saglam") %>
 parents<-read_csv("meta/parents.csv")
 
 
-m1<-bind_rows(lfs,sag,parents) %>% filter(Dedup > 1e6) %>% mutate(Total=n()) %>% group_by(Category, clust_name_100, Sex, Total) %>% summarize(Count=n()) %>% relocate(-Total)
+bind_rows(sag,parents) %>% filter(Dedup > 1e6) %>% mutate(Total=n()) %>% group_by(Category, clust_name_100, Sex, Total) %>% summarize(Count=n()) %>% relocate(-Total)
 
 m1$clust_name_100<-factor(m1$clust_name_100, levels=c("FW","LS","MS","HS","UNK"))
-m1<-bind_rows(lfs,sag,parents) %>% filter(Dedup > 1e6)
+m1<-bind_rows(sag,parents) %>% filter(Dedup > 1e6)
 m1 %>% select(Path) %>% write_tsv("bamlists/combined.bamlist", col_names = FALSE)
 m1 %>% select(SampleID) %>% write_tsv("bamlists/combined.names", col_names = FALSE)
 
@@ -58,7 +58,7 @@ Trying 85% threshold first, want scaffold_11:20131490
 
 ```{sh, eval=FALSE}
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 85 -bam bamlists/combined2.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-minInd 72 -bam bamlists/combined.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
 -rf /home/maccamp/genomes/longfin-polished/scaffold1126.txt \
 -out outputs/305/snps-wgs  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
@@ -105,14 +105,14 @@ as.ggplot(pheatmap(m, cluster_rows = TRUE, annotation_col = annot,
                    labels_col = sfb$ID, labels_row = ddf2$X2, fontsize_row = 14, fontsize_col = 9)) +
   ggtitle("Heatmap of Longfin Smelt Variants on scaffold_26\n") + 
   theme(plot.title = element_text(hjust=0.5))
-ggsave("outputs/304/lfs-sex-heatmap-1m.pdf", width=20, height=12)
+ggsave("outputs/305/lfs-sex-heatmap-1m.pdf", width=20, height=12)
 ```
 
 
 Scaffold 11
 
 ```{r}
-ddf<-read_tsv("outputs/305/snps-wgs.geno.gz", col_names = FALSE) %>% select(-X56)
+ddf<-read_tsv("outputs/305/snps-wgs.geno.gz", col_names = FALSE) %>% select(-X103)
 ddf[ddf==-1]<-NA
 ddf<-ddf %>% filter(X1=="lcl|scaffold_11")
 ddf2<-ddf %>% filter(X2 > 19e6)
@@ -122,7 +122,7 @@ m<-ddf2 %>% select(-X1, -X2) %>% as.matrix()
 
 annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
 
-annot$Pheno<-m1$clust_name_100
+annot$Pheno<-m2$clust_name_100
 
 ann_colors = list(
   Pheno = c(FW="orange", LS="red", MS="purple", HS="blue",UNK="grey"))
@@ -132,10 +132,10 @@ ann_colors = list(
 ```{r}
 
 as.ggplot(pheatmap(m, annotation_col = annot, annotation_colors =  ann_colors, color = viridis(3,option="magma", alpha=0.9),
-                   labels_row = ddf2$X2, labels_col = m1$SampleID, fontsize_row = 14, fontsize_col = 9, cluster_rows = TRUE, cluster_cols = TRUE))+
+                   labels_row = ddf2$X2, labels_col = m2$SampleID, fontsize_row = 12, fontsize_col = 8, cluster_rows = TRUE, cluster_cols = TRUE))+
             ggtitle("Heatmap of Longfin Smelt Variants on scaffold_11\n") + 
   theme(plot.title = element_text(hjust=0.5))
-ggsave("outputs/305/lfs-11-heatmap.pdf", width=12, height=8)
+ggsave("outputs/305/lfs-11-heatmap.pdf", width=14, height=8)
 
 ```
 
