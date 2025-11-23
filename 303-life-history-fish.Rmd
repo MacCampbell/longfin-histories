@@ -96,6 +96,7 @@ downsample<-ggf2 %>% filter(Dedup > 2e6 ) %>%
 
 downsample %>% select(ReductionCommand) %>% write_csv("303.1-downsample.sh", col_names = FALSE)
 
+
 ```
 
 ```{sh, eval=FALSE}
@@ -103,6 +104,21 @@ module load parallel
 srun -p high -t 02:00:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 parallel -j 10  < 303.1-downsample.sh > outputs/303/downsample.stdout 2> outputs/303/downsample.stderr
 #index .bams
 for f in *.bam; do samtools index $f; done;
+```
+
+
+## Combine with parents
+
+```{r}
+parents<-read_csv("meta/parents.csv")
+
+comb<-ggf %>% mutate(Pop="Life History", Sex="UNK", Category="Life History") %>% select(Pop, SampleID, Sex, Aligned, Dedup, Cov, Path, Category, clust_name_100) %>% bind_rows(parents)
+
+downsample<-parents %>% filter(Dedup > 2e6 ) %>% mutate(Frac=2e6/Dedup) %>% mutate(NewPath=ifelse(Dedup > 2e6, paste0("data/downsample/",SampleID,".reduced.bam"),Path)) %>%
+  mutate(ReductionCommand = paste0("samtools view -bs ",Frac, " ", Path, " > ", NewPath))
+
+downsample %>% select(ReductionCommand) %>% write_csv("303.2-downsample.sh", col_names = FALSE)
+
 ```
 
 
@@ -125,6 +141,10 @@ m27 %>% select(Path) %>% write_tsv("bamlists/27.bamlist", col_names = FALSE)
 m46 %>% select(Path) %>% write_tsv("bamlists/46.bamlist", col_names = FALSE)
  
 ##Including the ten parents
+m39<-comb %>% filter(Dedup > 8e5)
+
+m33 %>% select(Path) %>% write_tsv("bamlists/33.bamlist", col_names = FALSE)
+m27 %>% select(Path) %>% write_tsv("bamlists/27.bamlist", col_names = FALSE)
 
 ```
 
