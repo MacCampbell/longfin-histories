@@ -468,7 +468,7 @@ lc2<-lc %>% filter(BP_A > 17e6)
 ggplot(lc2) +
   geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
   scale_color_gradient(low="khaki1", high="red") + 
-  ggtitle("lcl|scaffold_11 LD")+
+  ggtitle("lcl|scaffold_26 LD")+
   theme_bw() +
   theme(panel.grid = element_blank())
 

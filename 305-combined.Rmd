@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 
 ```{r}
 library(ape)
+library(viridis)
 library(tidyverse)
 library(ggpubr)
 library(ggrepel)
@@ -21,22 +22,35 @@ library(tanggle)
 library(pheatmap)
 ```
 
-Combine life history fish, SFB fish and parents
+Combine life history fish, SFB fish and parents. Let's combine all Saglam fish with 1e6 reads
 
 ```{r}
 lfs<-read_csv("meta/life-history-fish.csv") %>% mutate(Category="Life History") %>% mutate(Pop="Life History") %>% mutate(Sex="UNK") %>% select(Pop, SampleID, Aligned, Dedup, Cov, clust_name_100, Category, Path, Sex)
-sfb<-read_csv("meta/sfb.csv") %>% rename(Aligned=Reads, SampleID=ID) %>% mutate(Category="Saglam") %>% mutate(clust_name_100="UNK") %>% mutate(Sex="UNK")
+
+sag<-read_csv("meta/saglam.csv", col_names=c("ID","Reads","Dedup","Cov")) %>% mutate(Path=paste0("data/polish-saglam/",ID,".sort.flt.bam"))
+sag$Pop<-gsub("_\\d+","",sag$ID)
+sag<-sag %>% rename(Aligned=Reads, SampleID=ID) %>% mutate(Category="Saglam") %>% mutate(clust_name_100="UNK") %>% mutate(Sex="UNK")
 parents<-read_csv("meta/parents.csv")
 
 
-bind_rows(lfs,sfb,parents) %>% filter(Dedup > 1e6) %>% mutate(Total=n()) %>% group_by(Category, clust_name_100, Sex, Total) %>% summarize(Count=n()) %>% relocate(-Total)
+m1<-bind_rows(lfs,sag,parents) %>% filter(Dedup > 1e6) %>% mutate(Total=n()) %>% group_by(Category, clust_name_100, Sex, Total) %>% summarize(Count=n()) %>% relocate(-Total)
 
-m1<-bind_rows(lfs,sfb,parents) %>% filter(Dedup > 1e6)
+m1$clust_name_100<-factor(m1$clust_name_100, levels=c("FW","LS","MS","HS","UNK"))
+m1<-bind_rows(lfs,sag,parents) %>% filter(Dedup > 1e6)
 m1 %>% select(Path) %>% write_tsv("bamlists/combined.bamlist", col_names = FALSE)
 m1 %>% select(SampleID) %>% write_tsv("bamlists/combined.names", col_names = FALSE)
 
+
+m2<-bind_rows(sag,parents) %>% filter(Dedup > 8e5)
+m2 %>% select(Path) %>% write_tsv("bamlists/combined2.bamlist", col_names = FALSE)
+m2 %>% select(SampleID) %>% write_tsv("bamlists/combined2.names", col_names = FALSE)
+
+
 ```
 
+
+How to proceed?  One option is to call SNPs with sag fish and parents and look at LD and determine sex determination mechanism and scaffold 11. Then call snps from Life History fish (20131490?)
+Otherwise, they can all be called together, then filtered later.
 
 
 Trying 85% threshold first, want scaffold_11:20131490
@@ -44,13 +58,18 @@ Trying 85% threshold first, want scaffold_11:20131490
 
 ```{sh, eval=FALSE}
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 45 -bam bamlists/combined.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-minInd 85 -bam bamlists/combined2.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
 -rf /home/maccamp/genomes/longfin-polished/scaffold1126.txt \
 -out outputs/305/snps-wgs  \
--minMaf 0.01 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/305/snps.out 2> outputs/305/snps.err &
 ```
 
+using two chroms
+With MAF of 0.01 with 53 test fish, 10K+ snps 
+With MAF of 0.05 with 53 test fish  2671 snps 85% missing. Two snps 'tag' inversion
+
+MAF 0.05, 75% missing 3674 SNPs, and 5 'tag' inversion
 
 Create VCF
 
@@ -66,3 +85,58 @@ bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode maxAF f
 bgzip filtered.vcf
 ```
 
+
+# Heatmaps of key regions
+
+```{r}
+ddf<-read_tsv("outputs/305/snps-wgs.geno.gz", col_names = c("FALSE")) %>% select(-X56)
+ddf[ddf==-1]<-NA
+ddf<-ddf %>% filter(`FALSE`=="lcl|scaffold_26")
+ddf2<-ddf %>% filter(X2 %in% tops$Position)
+m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Sex<-annotcols$Sex
+annot
+```
+
+```{r}
+as.ggplot(pheatmap(m, cluster_rows = TRUE, annotation_col = annot,
+                   labels_col = sfb$ID, labels_row = ddf2$X2, fontsize_row = 14, fontsize_col = 9)) +
+  ggtitle("Heatmap of Longfin Smelt Variants on scaffold_26\n") + 
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/304/lfs-sex-heatmap-1m.pdf", width=20, height=12)
+```
+
+
+Scaffold 11
+
+```{r}
+ddf<-read_tsv("outputs/305/snps-wgs.geno.gz", col_names = FALSE) %>% select(-X56)
+ddf[ddf==-1]<-NA
+ddf<-ddf %>% filter(X1=="lcl|scaffold_11")
+ddf2<-ddf %>% filter(X2 > 19e6)
+#ddf2 <- ddf2 %>% filter(X2 %in% c(20131490,20144334,20263784,20263652,29263756))
+
+m<-ddf2 %>% select(-X1, -X2) %>% as.matrix()
+
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Pheno<-m1$clust_name_100
+
+ann_colors = list(
+  Pheno = c(FW="orange", LS="red", MS="purple", HS="blue",UNK="grey"))
+
+```
+
+```{r}
+
+as.ggplot(pheatmap(m, annotation_col = annot, annotation_colors =  ann_colors, color = viridis(3,option="magma", alpha=0.9),
+                   labels_row = ddf2$X2, labels_col = m1$SampleID, fontsize_row = 14, fontsize_col = 9, cluster_rows = TRUE, cluster_cols = TRUE))+
+            ggtitle("Heatmap of Longfin Smelt Variants on scaffold_11\n") + 
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/305/lfs-11-heatmap.pdf", width=12, height=8)
+
+```
+
+Derived/inverted type appears to be linked to lower salinity environments.
