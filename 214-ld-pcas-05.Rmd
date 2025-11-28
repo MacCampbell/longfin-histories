@@ -221,3 +221,225 @@ ggplot(p4) +
   xlab("Chromosome")
 ```
 
+# Check loadings
+
+```{sh,eval=FALSE}
+bcftools view -Ov -r SUPER_10:16000000- outputs/214/plink-05-filtered.vcf.gz     > outputs/214/vcfs/SUPER_10-region.vcf
+bcftools view -Ov -r SUPER_6:0-3500000 outputs/214/plink-05-filtered.vcf.gz     > outputs/214/vcfs/SUPER_6-region.vcf
+bcftools view -Ov -r SUPER_23:0-2500000 outputs/214/plink-05-filtered.vcf.gz     > outputs/214/vcfs/SUPER_23-region.vcf
+bcftools view -Ov -r SUPER_24:6000000- outputs/214/plink-05-filtered.vcf.gz     > outputs/214/vcfs/SUPER_24-region.vcf
+bcftools view -Ov -r SUPER_1:0-10000000 outputs/214/plink-05-filtered.vcf.gz     > outputs/214/vcfs/SUPER_1-region.vcf
+```
+
+```{r}
+vcf<-read.vcfR(file="outputs/214/vcfs/SUPER_1-region.vcf")
+genind<-vcfR2genind(vcf)
+genind@pop<-as.factor(meta$Pop)
+```
+
+
+```{r}
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(meta)
+
+eig<-pca1$eig/sum(pca1$eig)*100
+```
+
+```{r}
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=SexChar), alpha=0.75, cex=2, pch=21) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") 
+pc12
+ggsave("outputs/214/super-1-region-pca.jpeg")
+```
+
+
+```{r}
+loadings<-pca1$c1 %>% as_tibble()
+loadings$Allele<-rownames(pca1$c1) 
+
+loadings
+loadings$Position<-gsub("SUPER_\\d+_","",loadings$Allele)
+loadings$Position<-gsub("\\.\\d+$","",loadings$Position)
+
+loadings$Position<-as.numeric(loadings$Position)
+loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .05) %>% select(-CS2, -CS3) %>% 
+  mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
+
+tops %>% relocate(Chrom, Position, CS1) 
+
+tops %>% write_csv("outputs/214/chrom1-loadings.csv")
+```
+
+
+```{r}
+vcf<-read.vcfR(file="outputs/214/vcfs/SUPER_6-region.vcf")
+genind<-vcfR2genind(vcf)
+genind@pop<-as.factor(meta$Pop)
+```
+
+
+```{r}
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(meta)
+
+eig<-pca1$eig/sum(pca1$eig)*100
+```
+
+```{r}
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=SexChar), alpha=0.75, cex=2, pch=21) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") 
+pc12
+ggsave("outputs/214/super-6-region-pca.jpeg")
+```
+
+
+```{r}
+loadings<-pca1$c1 %>% as_tibble()
+loadings$Allele<-rownames(pca1$c1) 
+
+loadings
+loadings$Position<-gsub("SUPER_\\d+_","",loadings$Allele)
+loadings$Position<-gsub("\\.\\d+$","",loadings$Position)
+
+loadings$Position<-as.numeric(loadings$Position)
+loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .2) %>% select(-CS2, -CS3) %>% 
+  mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
+
+tops %>% relocate(Chrom, Position, CS1) 
+
+tops %>% write_csv("outputs/214/chrom6-loadings.csv")
+```
+
+
+## chrom 10
+
+
+```{r}
+vcf<-read.vcfR(file="outputs/214/vcfs/SUPER_10-region.vcf")
+genind<-vcfR2genind(vcf)
+genind@pop<-as.factor(meta$Pop)
+```
+
+
+```{r}
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(meta)
+
+eig<-pca1$eig/sum(pca1$eig)*100
+```
+
+```{r}
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=SexChar), alpha=0.75, cex=2, pch=21) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") 
+pc12
+ggsave("outputs/214/super-10-region-pca.jpeg")
+```
+
+
+```{r}
+loadings<-pca1$c1 %>% as_tibble()
+loadings$Allele<-rownames(pca1$c1) 
+
+loadings
+loadings$Position<-gsub("SUPER_\\d+_","",loadings$Allele)
+loadings$Position<-gsub("\\.\\d+$","",loadings$Position)
+
+loadings$Position<-as.numeric(loadings$Position)
+loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .4) %>% select(-CS2, -CS3) %>% 
+  mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
+
+tops %>% relocate(Chrom, Position, CS1) 
+
+tops %>% write_csv("outputs/214/chrom10-loadings.csv")
+```
+
+
+
+## chrom 24
+
+```{r}
+vcf<-read.vcfR(file="outputs/214/vcfs/SUPER_24-region.vcf")
+genind<-vcfR2genind(vcf)
+genind@pop<-as.factor(meta$Pop)
+```
+
+
+```{r}
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(meta)
+
+eig<-pca1$eig/sum(pca1$eig)*100
+```
+
+```{r}
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=SexChar), alpha=0.75, cex=2, pch=21) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "top") 
+pc12
+ggsave("outputs/214/super-24-region-pca.jpeg")
+```
+
+
+```{r}
+loadings<-pca1$c1 %>% as_tibble()
+loadings$Allele<-rownames(pca1$c1) 
+
+loadings
+loadings$Position<-gsub("SUPER_\\d+_","",loadings$Allele)
+loadings$Position<-gsub("\\.\\d+$","",loadings$Position)
+
+loadings$Position<-as.numeric(loadings$Position)
+loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .4) %>% select(-CS2, -CS3) %>% 
+  mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
+
+tops %>% relocate(Chrom, Position, CS1) 
+
+tops %>% write_csv("outputs/214/chrom24-loadings.csv")
+```

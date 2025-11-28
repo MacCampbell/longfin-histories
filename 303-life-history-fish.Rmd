@@ -51,7 +51,32 @@ https://www.ncbi.nlm.nih.gov/sra/SRX30480217[accn]	Fam01 Sire     SRR35397627
 
 putting in data/parents
 
+also, parents-reps
+Yeah we have extra reps for the Fam01 Dam and the Fam27 sire. I think it was about reliability across plates.
+(already downladed Rep3 and Fam27 sire rep 3)
+
+Fam01: Dam_Rep2 https://sra-downloadb.be-md.ncbi.nlm.nih.gov/sos8/sra-pub-zq-818/SRR035/35397/SRR35397611/SRR35397611.lite.1
+Fam01: Dam https://sra-downloadb.be-md.ncbi.nlm.nih.gov/sos8/sra-pub-zq-818/SRR035/35397/SRR35397626/SRR35397626.lite.1
+Fam27: Sire_Rep1 https://sra-downloadb.be-md.ncbi.nlm.nih.gov/sos8/sra-pub-zq-818/SRR035/35397/SRR35397525/SRR35397525.lite.1 (is 27 MB so who cares)
 need to dump
+
+Repeats of SRR35397610
+Repeat of SRR35397524
+
+samtools merge -o data/parents/fam01-dam.sorted.bam data/parents/SRR35397610.sort.flt.bam data/parents-reps/SRR35397611.sort.flt.bam data/parents-reps/SRR35397626.sort.flt.bam
+samtools index data/parents/fam01-dam.sorted.bam
+samtools flagstat  data/parents/fam01-dam.sorted.bam
+7296623 + 0 mapped (100.00% : N/A)
+6924220 + 0 properly paired (100.00% : N/A)
+
+samtools merge -o data/parents/fam27-sire.sorted.bam data/parents/SRR35397524.sort.flt.bam data/parents-reps/SRR35397525.sort.flt.bam
+samtools index data/parents/fam27-sire.sorted.bam
+samtools flagstat data/parents/fam27-sire.sorted.bam
+4191993 + 0 mapped (100.00% : N/A)
+3471457 + 0 properly paired (100.00% : N/A)
+
+editing the parents file for the Dedup numbers from these (4006064 + 0 mapped (100.00% : N/A))
+
 ```{sh, eval=FALSE}
 module load sratoolkit
 
@@ -110,14 +135,19 @@ for f in *.bam; do samtools index $f; done;
 ## Combine with parents
 
 ```{r}
-parents<-read_csv("meta/parents.csv")
+parents<-read_csv("meta/parents.csv") %>% mutate(NewPath=ifelse(Dedup > 2e6, paste0("data/downsample/",SampleID,".reduced.bam"),Path))
 
-comb<-ggf %>% mutate(Pop="Life History", Sex="UNK", Category="Life History") %>% select(Pop, SampleID, Sex, Aligned, Dedup, Cov, Path, Category, clust_name_100) %>% bind_rows(parents)
+comb<-ggf %>% mutate(NewPath=ifelse(Dedup > 2e6, paste0("data/downsample/",SampleID,".reduced.bam"),Path)) %>% mutate(Pop="Life History", Sex="UNK", Category="Life History") %>% select(Pop, SampleID, Sex, Aligned, Dedup, Cov, Path, Category, clust_name_100, NewPath) %>% bind_rows(parents)
 
 downsample<-parents %>% filter(Dedup > 2e6 ) %>% mutate(Frac=2e6/Dedup) %>% mutate(NewPath=ifelse(Dedup > 2e6, paste0("data/downsample/",SampleID,".reduced.bam"),Path)) %>%
   mutate(ReductionCommand = paste0("samtools view -bs ",Frac, " ", Path, " > ", NewPath))
 
 downsample %>% select(ReductionCommand) %>% write_csv("303.2-downsample.sh", col_names = FALSE)
+```
+
+```{sh}
+module load parallel
+srun -p high -t 02:00:00 --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 parallel -j 10  < 303.2-downsample.sh > outputs/303/downsample.stdout 2> outputs/303/downsample.stderr
 
 ```
 
@@ -143,8 +173,8 @@ m46 %>% select(Path) %>% write_tsv("bamlists/46.bamlist", col_names = FALSE)
 ##Including the ten parents
 m39<-comb %>% filter(Dedup > 8e5)
 
-m33 %>% select(Path) %>% write_tsv("bamlists/33.bamlist", col_names = FALSE)
-m27 %>% select(Path) %>% write_tsv("bamlists/27.bamlist", col_names = FALSE)
+m39 %>% select(Path) %>% write_tsv("bamlists/39.bamlist", col_names = FALSE)
+m39 %>% select(SampleID) %>% write_tsv("bamlists/39.names", col_names = FALSE)
 
 ```
 
@@ -184,6 +214,15 @@ srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/303/snps-50.out 2> outputs/303/snps-50.err &
 
 
+# combining life history fish with hatchery fish 
+srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
+-minInd 33 -bam bamlists/39.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
+-out outputs/303/snps-wgs-39 \
+-minMaf 0.01 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/303/snps-39.out 2> outputs/303/snps-39.err &
+	-> Number of sites retained after filtering: 182830 
+
 
 #create vcf
 plink --tped snps-wgs.tped --tfam snps-wgs.tfam  --out plink-binary --recode --allow-extra-chr --noweb
@@ -196,7 +235,20 @@ bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand fi
 bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode maxAF filtered.vcf > plink-pruned-max.vcf
 
 
-## Here I'm looking at only higher coverage individuals
+## ## Here I'm combining with known sex fish
+
+plink --tped snps-wgs-39.tped --tfam snps-wgs-39.tfam  --out plink-binary-39 --recode --allow-extra-chr --noweb
+plink --ped plink-binary-39.ped --map plink-binary-39.map --recode vcf --allow-extra-chr -out plink-39
+
+module load bcftools
+bcftools reheader -s ../../bamlists/39.names -o plink-renamed-39.vcf plink-39.vcf
+bcftools +fill-tags plink-renamed-39.vcf | bcftools view -i 'F_MISSING < 0.10' | bcftools view -i 'INFO/MAF > 0.05' > filtered-39.vcf
+bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered-1m.vcf > plink-pruned-39.vcf
+bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode maxAF filtered-1m.vcf > plink-pruned-max-39.vcf
+
+#need to bgzip and tabix files
+
+
 plink --tped snps-wgs-1m.tped --tfam snps-wgs-1m.tfam  --out plink-binary-1m --recode --allow-extra-chr --noweb
 plink --ped plink-binary-1m.ped --map plink-binary-1m.map --recode vcf --allow-extra-chr -out plink-1m
 
@@ -206,9 +258,15 @@ bcftools +fill-tags plink-renamed-1m.vcf | bcftools view -i 'F_MISSING < 0.10' |
 bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode rand filtered-1m.vcf > plink-pruned-1m.vcf
 bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode maxAF filtered-1m.vcf > plink-pruned-max-1m.vcf
 
-#need to bgzip and tabix files
-
 ```
+
+
+Checking
+```{sh, eval=FALSE}
+paste \
+<(bcftools query -f '[%SAMPLE\t]\n' filtered-39.vcf.gz | head -1 | tr '\t' '\n') \
+<(bcftools query -f '[%GT\t]\n' filtered-39.vcf.gz | awk -v OFS="\t" '{for (i=1;i<=NF;i++) if ($i == "./.") sum[i]+=1 } END {for (i in sum) print i, sum[i] / NR }' | sort -k1,1n | cut -f 2) > missingness.stats
+````
 
 
 16195 variants and 33 people pass filters and QC with downsampling from 1.5e6
@@ -238,10 +296,12 @@ bcftools view  outputs/303/filtered-1m.vcf.gz  -r 'lcl|scaffold_26':8.25e6- > ou
 cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/303/plink-renamed-1m.vcf.gz > outputs/303/vcfs/$line.vcf; done;
 bcftools view  outputs/303/plink-renamed-1m.vcf.gz  -r 'lcl|scaffold_26':8.25e6- > outputs/303/vcfs/26-region-1m.vcf
 
+
+cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/303/filtered-39.vcf.gz  > outputs/303/vcfs/$line.vcf; done;
+bcftools view  outputs/303/filtered-39.vcf.gz  -r 'lcl|scaffold_26':8.25e6- > outputs/303/vcfs/26-region-1m.vcf
+bcftools view  outputs/303/filtered-39.vcf.gz  -r 'lcl|scaffold_11':17e6- > outputs/303/vcfs/11-region-1m.vcf
+
 for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basename $f vcf`ldf --allow-extra-chr --double-id; done;
-
-
-bcftools view  outputs/303/filtered-1m.vcf.gz  -r 'lcl|scaffold_11':17e6- > outputs/303/vcfs/11-region-1m.vcf
 
 ```
 
@@ -251,7 +311,7 @@ files<-list.files("outputs/303/vcfs",pattern = "*.ldf.ld", full.names = TRUE)
 plotLd<-function(file) {
   chrom<-gsub("outputs/303/vcfs/","",file)
   chrom<-gsub(".ldf.ld","", chrom)
-  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.3)
+  lc<-read.delim(file,sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.1)
 
   ggplot(lc) +
   geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
@@ -310,7 +370,7 @@ X <- tab(gen, NA.method="mean")
 pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
 
 df<-pca1$li
-df<-df %>% bind_cols(m27)
+df<-df %>% bind_cols(m39)
 
 eig<-pca1$eig/sum(pca1$eig)*100
 ```
@@ -353,7 +413,7 @@ tops %>% relocate(Chrom, Position, CS1)
 ```{r}
 library(pheatmap)
 #ddf<-read_tsv("outputs/303/snps-wgs.geno.gz", col_names = c("FALSE")) %>% select(-X147)
-ddf<-read_tsv("outputs/303/snps-wgs-1m.geno.gz",  col_names = c("FALSE")) %>% select(-X30)
+ddf<-read_tsv("outputs/303/snps-wgs-39.geno.gz",  col_names = c("FALSE")) %>% select(-X42)
 ddf[ddf==-1]<-NA
 ddf<-ddf %>% filter(`FALSE`=="lcl|scaffold_26")
 ddf2<-ddf %>% filter(X2 %in% tops$Position)
@@ -366,10 +426,10 @@ annot
 
 ```{r}
 as.ggplot(pheatmap(m, annotation_col = annot, cluster_rows = FALSE,
-                   labels_col = m27$SampleID, labels_row = ddf2$X2, fontsize_row = 14, fontsize_col = 9)) +
+                   labels_col = m39$SampleID, labels_row = ddf2$X2, fontsize_row = 14, fontsize_col = 9)) +
   ggtitle("Heatmap of Longfin Smelt Variants on scaffold_26\n") + 
   theme(plot.title = element_text(hjust=0.5))
-ggsave("outputs/303/lfs-sex-heatmap-1m.pdf", width=20, height=12)
+ggsave("outputs/303/lfs-sex-heatmap-lfs.pdf", width=20, height=12)
 ```
 
 
@@ -425,6 +485,12 @@ F(type1)=(6+4)/(6+8+6)=0.50
 MS fish, n=6
 F(type1)=(4+4)/(4+8)=0.67
 
+Actual genotypes
+
+(base) maccamp@farm:~/longfin-histories/outputs/303$ grep 20131490 snps-wgs-75.tped 
+lcl|scaffold_11 lcl|scaffold_11_20131490 0 20131490	G A	A A	A A	G A	G A	A A	G A	0 0	0 0	G G	G G	G G	G G	G G	0 0	G A	G G	G A	G G	G G	G A	G A	G G	G A	G G	G A	G G
+
+G is ancestral and presumbaly = 0 (same as reference alleles)
 
 ```{r}
 Frequency<-c(0.93,0.50,0.67,0.50)
@@ -446,13 +512,16 @@ obj
 ```{r}
 sqrt(((0.93*(1-0.93))/14))
 ```
+```{r}
+obj2<-obj %>% filter(Class != "FW")
+```
 ```{R}
-ggplot(obj) +
+ggplot(obj2) +
   geom_segment(aes(x=Class, xend=Class, y=Frequency-Error, yend=Frequency+Error)) +
   geom_point(aes(x=Class, y=Frequency)) +
   geom_text(aes(x=Class, y=Frequency+Error+0.02, label=paste0("n = ",N))) +
   ylim(0,1.05) +
-  ylab("Frequency of Type 1 Variant\n") +
+  ylab("Frequency of Ancestral Form\n") +
   xlab("\nPhenotypic Class - clust_name_100") +
   theme_bw() +
   theme(panel.grid=element_blank()) +

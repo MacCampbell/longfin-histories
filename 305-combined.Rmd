@@ -19,6 +19,8 @@ library(ggplotify)
 library(snpR)
 library(ggtree)
 library(tanggle)
+library(vcfR)
+library(adegenet)
 library(pheatmap)
 ```
 
@@ -35,8 +37,8 @@ parents<-read_csv("meta/parents.csv")
 
 bind_rows(sag,parents) %>% filter(Dedup > 1e6) %>% mutate(Total=n()) %>% group_by(Category, clust_name_100, Sex, Total) %>% summarize(Count=n()) %>% relocate(-Total)
 
-m1$clust_name_100<-factor(m1$clust_name_100, levels=c("FW","LS","MS","HS","UNK"))
 m1<-bind_rows(sag,parents) %>% filter(Dedup > 1e6)
+m1$clust_name_100<-factor(m1$clust_name_100, levels=c("FW","LS","MS","HS","UNK"))
 m1 %>% select(Path) %>% write_tsv("bamlists/combined.bamlist", col_names = FALSE)
 m1 %>% select(SampleID) %>% write_tsv("bamlists/combined.names", col_names = FALSE)
 
@@ -50,7 +52,9 @@ m3 %>% select(Path) %>% write_tsv("bamlists/combined3.bamlist", col_names = FALS
 m3 %>% select(SampleID) %>% write_tsv("bamlists/combined3.names", col_names = FALSE)
 
 ```
+(base) maccamp@farm:~/longfin-histories/outputs/305$ grep 20131490 snps-wgs.tped 
 
+lcl|scaffold_11 lcl|scaffold_11_20131490 0 20131490	A A	G A	A A	G G	G G	G G	G G	G G	G A	G G	G G	G A	G A	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G A	G G	G G	A A	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G A	G G	G G	A A	A A	G G	G A	G A	A A	G G	A A	G A	G G	G G	G A	0 0	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G G	G A	0 0	G G	G A	A A	A A	A A	G G
 
 How to proceed?  One option is to call SNPs with sag fish and parents and look at LD and determine sex determination mechanism and scaffold 11. Then call snps from Life History fish (20131490?)
 Otherwise, they can all be called together, then filtered later.
@@ -63,7 +67,7 @@ Next 90% threshold
 
 ```{sh, eval=FALSE}
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 72 -bam bamlists/combined.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-minInd 73 -bam bamlists/combined.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
 -rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
 -out outputs/305/snps-wgs  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
@@ -75,7 +79,7 @@ srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task
 -rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
 -out outputs/305/snps-wgs-2  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
--doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/305/snps.out 2> outputs/305/snps.err &
+-doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/305/snps-2.out 2> outputs/305/snps-2.err &
 #	-> Number of sites retained after filtering: 68616 
 
 
@@ -110,6 +114,21 @@ bcftools +prune -m 0.20 -w 50kb --nsites-per-win 1 --nsites-per-win-mode maxAF f
 bgzip filtered.vcf
 ```
 
+
+```{sh, eval=FALSE}
+paste \
+<(bcftools query -f '[%SAMPLE\t]\n' filtered.vcf.gz | head -1 | tr '\t' '\n') \
+<(bcftools query -f '[%GT\t]\n' filtered.vcf.gz | awk -v OFS="\t" '{for (i=1;i<=NF;i++) if ($i == "./.") sum[i]+=1 } END {for (i in sum) print i, sum[i] / NR }' | sort -k1,1n | cut -f 2) > missingness.stats
+```
+
+```{r}
+miss<-read_tsv("outputs/305/missingness.stats", col_names=c("SampleID","Missingness"))
+m22<-m2 %>% select(-Missingness) %>% left_join(miss, by=c("SampleID"="SampleID"))
+m22<- m22 %>% dplyr::filter(Missingness<0.10)
+m22 %>% select(SampleID) %>% write_tsv("outputs/305/m22.names", col_names = FALSE)
+```
+
+
 # PCA
 
 ```{r}
@@ -126,10 +145,15 @@ ggsave("outputs/305/lfs-pca.jpeg")
 
 # LD
 ```{sh, eval=FALSE}
-cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/305/filtered.vcf.gz > outputs/305/vcfs/$line.vcf; done;
-bcftools view  outputs/305/filtered.vcf.gz  -r 'lcl|scaffold_26':8.25e6- > outputs/305/vcfs/26-region.vcf
-bcftools view  outputs/305/filtered.vcf.gz  -r 'lcl|scaffold_11':17e6- > outputs/305/vcfs/11-region.vcf
-bcftools view  outputs/305/filtered.vcf.gz  -r 'lcl|scaffold_11':19e6- > outputs/305/vcfs/11-region-2.vcf
+
+bcftools view -S outputs/305/m22.names outputs/305/filtered.vcf.gz > outputs/305/filtered.22.vcf
+bgzip outputs/305/filtered.22.vcf
+tabix outputs/305/filtered.22.vcf.gz 
+#cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/305/filtered.vcf.gz > outputs/305/vcfs/$line.vcf; done;
+cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/305/filtered.22.vcf.gz > outputs/305/vcfs/$line.vcf; done;
+bcftools view  outputs/305/filtered.22.vcf.gz  -r 'lcl|scaffold_26':8.25e6- > outputs/305/vcfs/26-region.vcf
+bcftools view  outputs/305/filtered.22.vcf.gz  -r 'lcl|scaffold_11':17e6- > outputs/305/vcfs/11-region.vcf
+bcftools view  outputs/305/filtered.22.vcf.gz  -r 'lcl|scaffold_11':19e6- > outputs/305/vcfs/11-region-2.vcf
 
 for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basename $f vcf`ldf --allow-extra-chr --double-id; done;
 
@@ -189,7 +213,7 @@ bcftools view lcl\|scaffold_26.vcf.gz -r 'lcl|scaffold_26':8.25e6- > linkage-26.
 ```{r}
 vcf<-read.vcfR(file="outputs/305/vcfs/26-region.vcf")
 genind<-vcfR2genind(vcf)
-genind@pop<-as.factor(s144$Pop)
+genind@pop<-as.factor(m22$Pop)
 ```
 
 
@@ -200,7 +224,7 @@ X <- tab(gen, NA.method="mean")
 pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
 
 df<-pca1$li
-df<-df %>% bind_cols(m2)
+df<-df %>% bind_cols(m22 %>% filter())
 
 eig<-pca1$eig/sum(pca1$eig)*100
 ```
@@ -242,7 +266,7 @@ tops %>% relocate(Chrom, Position, CS1)
 ```{r}
 vcf<-read.vcfR(file="outputs/305/vcfs/11-region.vcf")
 genind<-vcfR2genind(vcf)
-genind@pop<-as.factor(m2$Pop)
+genind@pop<-as.factor(m22$Pop)
 ```
 
 
@@ -253,7 +277,7 @@ X <- tab(gen, NA.method="mean")
 pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
 
 df<-pca1$li
-df<-df %>% bind_cols(m2)
+df<-df %>% bind_cols(m22)
 
 eig<-pca1$eig/sum(pca1$eig)*100
 ```

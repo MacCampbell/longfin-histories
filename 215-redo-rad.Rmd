@@ -315,11 +315,6 @@ ggsave(paste0("outputs/215/chrom-pcs/",chrom,"-pcs.pdf"))
 lapply(files, plotPCA)
 ```
 
-## Run sex gwas
-
-
-## Run pheno gwas
-
 
 ## Figure 2
 
@@ -475,6 +470,11 @@ ggsave("outputs/215/sex-gwas-curated-genome.jpeg")
 
 ## Local PCA
 
+(base) ➜  215 git:(main) ✗ gunzip -c plink-05-filtered.vcf.gz | grep -v "#" | wc
+    6371  828230 3600635
+(base) ➜  215 git:(main) ✗ gunzip -c plink-81-05-filtered.vcf.gz | grep -v "#" | wc
+    9447  850230 3812680
+    
 ```{sh, eval=FALSE}
 cat meta/super-chroms.txt  | while read line; do bcftools view -Ob -r $line outputs/215/plink-81-05-filtered.vcf.gz  > outputs/215/bcfs/$line.bcf; done;
 
@@ -493,13 +493,18 @@ write.table(table, "outputs/215/bcfs/sample_info.tsv", quote = TRUE, row.names =
 
 ```{sh, eval=FALSE}
 ./run_lostruct.R -i /Users/mac/github/longfin-histories/outputs/215/bcfs -t snp -s 20 -m 5 -I /Users/mac/github/longfin-histories/outputs/215/bcfs/sample_info.tsv -j 215
+./run_lostruct.R -i /Users/mac/github/longfin-histories/outputs/215/bcfs -t snp -s 15 -m 5 -I /Users/mac/github/longfin-histories/outputs/215/bcfs/sample_info.tsv -j 215
+
 cp lostruct_results/type_snp_size_20_weights_none_jobid_215/mds_coords.csv ~/github/longfin-histories/outputs/215/
+cp lostruct_results/type_snp_size_15_weights_none_jobid_215/mds_coords.csv ~/github/longfin-histories/outputs/215/mds_coords-15.csv
+
 ```
 
 
 
 ```{r}
-mds<-read_csv("outputs/214//mds_coords.csv") # 20 snp windows
+mds<-read_csv("outputs/215/mds_coords.csv") # 20 snp windows
+mds<-read_csv("outputs/215/mds_coords-15.csv") # 20 snp windows
 
 
 mds$chrom<-factor(mds$chrom,levels=c("SUPER_1","SUPER_2","SUPER_3","SUPER_4","SUPER_5","SUPER_6","SUPER_7","SUPER_8","SUPER_9","SUPER_10","SUPER_11","SUPER_12","SUPER_13","SUPER_14","SUPER_15","SUPER_16","SUPER_17","SUPER_18","SUPER_19","SUPER_20","SUPER_21","SUPER_22","SUPER_23","SUPER_24","SUPER_25","SUPER_26","SUPER_27","SUPER_28"))
@@ -637,4 +642,140 @@ ggplot(p3) +
   scale_color_manual(values=mycolors) +
   ylab("MDS3") +
   xlab("Chromosome")
+```
+
+
+## What about potential diagnostic SNPs?
+
+Let's look at regions of chroms and create heatmaps
+
+
+bcftools view -Ov -r SUPER_10:16000000- outputs/214/plink-05-filtered.vcf.gz     > outputs/214/vcfs/SUPER_10-region.vcf
+bcftools view -Ov -r SUPER_6:0-3500000 outputs/214/plink-05-filtered.vcf.gz     > outputs/214/vcfs/SUPER_6-region.vcf
+bcftools view -Ov -r SUPER_23:0-2500000 outputs/214/plink-05-filtered.vcf.gz     > outputs/214/vcfs/SUPER_23-region.vcf
+bcftools view -Ov -r SUPER_24:6000000- outputs/214/plink-05-filtered.vcf.gz     > outputs/214/vcfs/SUPER_24-region.vcf
+bcftools view -Ov -r SUPER_1:0-10000000 outputs/214/plink-05-filtered.vcf.gz     > outputs/214/vcfs/SUPER_1-region.vcf
+
+```{r}
+ddf<-read_tsv("outputs/215/snps-all-81.geno.gz", col_names = FALSE) %>% select(-X84)
+ddf[ddf==-1]<-NA
+ddf<-ddf %>% filter(X1=="SUPER_1")
+tops<-read_csv("outputs/214/chrom1-loadings.csv")
+ddf2<-ddf %>% filter(X2 %in% tops$Position)
+#ddf2<-ddf %>% filter(X2 < 12e6) %>% filter(X2 > 10e6)
+#ddf2 <- ddf2 %>% filter(X2 %in% c(20131490,20144334,20263784,20263652,29263756))
+
+m<-ddf2 %>% select(-X1, -X2) %>% as.matrix()
+
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Pheno<-m81$aggregated_new_classes
+
+ann_colors = list(
+  Pheno = c(FWR="red", MIG="blue"))
+
+```
+
+```{r}
+
+as.ggplot(pheatmap(m, annotation_col = annot, annotation_colors =  ann_colors, color = viridis(3,option="magma", alpha=0.9),
+                   labels_row = ddf2$X2, labels_col = m81$`Sequence File Name`, fontsize_row = 12, fontsize_col = 8, cluster_rows = TRUE, cluster_cols = TRUE))+
+            ggtitle("Heatmap of Delta Smelt variants on SUPER_1\n") + 
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/215/dsm-01-heatmap.pdf", width=14, height=8)
+
+```
+
+## Super 6
+```{r}
+ddf<-read_tsv("outputs/215/snps-all-81.geno.gz", col_names = FALSE) %>% select(-X84)
+ddf[ddf==-1]<-NA
+ddf<-ddf %>% filter(X1=="SUPER_6")
+tops<-read_csv("outputs/214/chrom6-loadings.csv")
+ddf2<-ddf %>% filter(X2 %in% tops$Position)
+#ddf2<-ddf %>% filter(X2 < 12e6) %>% filter(X2 > 10e6)
+#ddf2 <- ddf2 %>% filter(X2 %in% c(20131490,20144334,20263784,20263652,29263756))
+
+m<-ddf2 %>% select(-X1, -X2) %>% as.matrix()
+
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Pheno<-m81$aggregated_new_classes
+
+ann_colors = list(
+  Pheno = c(FWR="red", MIG="blue"))
+
+```
+
+```{r}
+
+as.ggplot(pheatmap(m, annotation_col = annot, annotation_colors =  ann_colors, color = viridis(3,option="magma", alpha=0.9),
+                   labels_row = ddf2$X2, labels_col = m81$`Sequence File Name`, fontsize_row = 12, fontsize_col = 8, cluster_rows = TRUE, cluster_cols = TRUE))+
+            ggtitle("Heatmap of Delta Smelt variants on SUPER_6\n") + 
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/215/dsm-06-heatmap.pdf", width=14, height=8)
+
+```
+
+## Super 10
+```{r}
+ddf<-read_tsv("outputs/215/snps-all-81.geno.gz", col_names = FALSE) %>% select(-X84)
+ddf[ddf==-1]<-NA
+ddf<-ddf %>% filter(X1=="SUPER_10")
+tops<-read_csv("outputs/214/chrom10-loadings.csv")
+ddf2<-ddf %>% filter(X2 %in% tops$Position)
+#ddf2<-ddf %>% filter(X2 < 12e6) %>% filter(X2 > 10e6)
+#ddf2 <- ddf2 %>% filter(X2 %in% c(20131490,20144334,20263784,20263652,29263756))
+
+m<-ddf2 %>% select(-X1, -X2) %>% as.matrix()
+
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Pheno<-m81$aggregated_new_classes
+
+ann_colors = list(
+  Pheno = c(FWR="red", MIG="blue"))
+
+```
+
+```{r}
+
+as.ggplot(pheatmap(m, annotation_col = annot, annotation_colors =  ann_colors, color = viridis(3,option="magma", alpha=0.9),
+                   labels_row = ddf2$X2, labels_col = m81$`Sequence File Name`, fontsize_row = 12, fontsize_col = 8, cluster_rows = TRUE, cluster_cols = TRUE))+
+            ggtitle("Heatmap of Delta Smelt variants on SUPER_10\n") + 
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/215/dsm-10-heatmap.pdf", width=14, height=8)
+
+```
+
+
+## Super 24
+```{r}
+ddf<-read_tsv("outputs/215/snps-all-81.geno.gz", col_names = FALSE) %>% select(-X84)
+ddf[ddf==-1]<-NA
+ddf<-ddf %>% filter(X1=="SUPER_24")
+tops<-read_csv("outputs/214/chrom24-loadings.csv")
+ddf2<-ddf %>% filter(X2 %in% tops$Position)
+#ddf2<-ddf %>% filter(X2 < 12e6) %>% filter(X2 > 10e6)
+#ddf2 <- ddf2 %>% filter(X2 %in% c(20131490,20144334,20263784,20263652,29263756))
+
+m<-ddf2 %>% select(-X1, -X2) %>% as.matrix()
+
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Pheno<-m81$aggregated_new_classes
+
+ann_colors = list(
+  Pheno = c(FWR="red", MIG="blue"))
+
+```
+
+```{r}
+
+as.ggplot(pheatmap(m, annotation_col = annot, annotation_colors =  ann_colors, color = viridis(3,option="magma", alpha=0.9),
+                   labels_row = ddf2$X2, labels_col = m81$`Sequence File Name`, fontsize_row = 12, fontsize_col = 8, cluster_rows = TRUE, cluster_cols = TRUE))+
+            ggtitle("Heatmap of Delta Smelt variants on SUPER_24\n") + 
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/215/dsm-24-heatmap.pdf", width=14, height=8)
+
 ```
