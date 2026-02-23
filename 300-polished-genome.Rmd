@@ -10,11 +10,17 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(ape)
+library(viridis)
+library(adegenet)
+library(RColorBrewer)
 library(tidyverse)
 library(ggpubr)
+library(grid)
+library(gridExtra)
 library(ggrepel)
 library(ggplotify)
 library(snpR)
+library(vcfR)
 library(ggtree)
 library(tanggle)
 library(pheatmap)
@@ -248,14 +254,6 @@ snpsRAND<-import.snpR.data(genotypes = "outputs/300/plink-pruned-1m.vcf",
 snps<-import.snpR.data(genotypes = "outputs/300/plink-pruned-max-1m.vcf", 
       sample.meta = s72 %>% select(Pop))
 ```
-
-```{r}
-p <- plot_clusters(snpsRAND, facets = c("Pop"), viridis.option = "H")
-p$plot$pca
-
-ggsave("outputs/300/lfs-pca-rand-1m.jpeg")
-```
-
 ```{r}
 p <- plot_clusters(snps, facets = c("Pop"), viridis.option = "H")
 p$plot$pca
@@ -264,25 +262,54 @@ ggsave("outputs/300/lfs-pca-1m.jpeg")
 ```
 
 ```{r}
+p <- plot_clusters(snpsRAND, facets = c("Pop"), viridis.option = "H")
+p$plot$pca
+
+ggsave("outputs/300/lfs-pca-rand-1m.jpeg")
+```
+
+
+
+```{r}
 ddf<-p$data$pca %>% as_tibble()
 ddf$Pop<-factor(ddf$Pop, levels=c("ALVS","CHPI","SFBY","PETA","SUIB","HUMB","COLR","LWSH","PTLC","HRLC","SKNA","YBAK"))
 
 labels<-ddf %>% group_by(Pop) %>% summarize(x=mean(PC1), y=mean(PC2), SampleSize=n())
+labels13<-ddf %>% group_by(Pop) %>% summarize(x=mean(PC1), y=mean(PC3), SampleSize=n())
 
 p12<-ggplot(ddf) +
   geom_point(aes(x=PC1, y=PC2, fill=Pop), pch=21, alpha=.75) +
-  geom_text_repel(data=labels, aes(x=x, y=y, label=paste0(Pop, " ", SampleSize)), max.overlaps = Inf) +
-  scale_fill_viridis_d(option="H") +
-  xlab(paste0("PC1 ", p$pca_loadings[1],"%")) +
-  ylab(paste0("PC2 ", p$pca_loadings[2],"%")) +
+ # geom_text_repel(data=labels, aes(x=x, y=y, label=paste0(Pop, " ", SampleSize)), max.overlaps = Inf) +
+   geom_text_repel(data=labels, aes(x=x, y=y, label=Pop), max.overlaps = Inf) +
+  scale_fill_viridis_d(option="H", name = "Sampling Group") +
+  xlab(paste0("PC1 (", p$pca_loadings[1],"%)")) +
+  ylab(paste0("PC2 (", p$pca_loadings[2],"%)")) +
   theme_bw() +
   theme(panel.grid = element_blank()) +
   ggtitle("B") +
-  theme(plot.title = element_text(hjust=0, size=16)) 
+  theme(plot.title = element_text(hjust=0, size=16, face="bold")) +
+  theme(legend.position = "none")
 
 
 p12
 ggsave("outputs/300/pc1.jpeg")
+
+p13<-ggplot(ddf) +
+  geom_point(aes(x=PC1, y=PC3, fill=Pop), pch=21, alpha=.75) +
+ # geom_text_repel(data=labels, aes(x=x, y=y, label=paste0(Pop, " ", SampleSize)), max.overlaps = Inf) +
+   geom_text_repel(data=labels13, aes(x=x, y=y, label=Pop), max.overlaps = Inf) +
+  scale_fill_viridis_d(option="H", name = "Sampling Group") +
+  xlab(paste0("PC1 (", p$pca_loadings[1],"%)")) +
+  ylab(paste0("PC3 (", p$pca_loadings[3],"%)")) +
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  ggtitle("C") +
+  theme(plot.title = element_text(hjust=0, size=16, face="bold")) 
+ # theme(legend.position = "none")
+
+
+p13
+ggsave("outputs/300/pc13.jpeg")
 
 vardf<-p$pca_loadings %>% as_tibble() %>% rename(`Percent Variance`=value) %>% head() %>% mutate(PC=1:n())
 
@@ -305,6 +332,16 @@ ggsave("outputs/300/scree.jpeg")
 
 ```
 
+```{r}
+blank <- grid.rect(gp=gpar(col="white"))
+```
+
+```{r}
+ggarrange(ggplotGrob(ggarrange(scree, blank, ncol=1)), p12, p13, ncol=3, widths=c(0.5,1,1.3))
+
+ggsave("outputs/300/supplemental-figure-s1.pdf", width=12, height=5)
+```
+
 ## LD
 ```{sh, eval=FALSE}
 
@@ -313,6 +350,8 @@ cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line ou
 cat outputs/300/1mbseqs.txt  | while read line; do bcftools view -Ov -r $line outputs/300/filtered-1m.vcf.gz > outputs/300/vcfs/$line.vcf; done;
 bcftools view  outputs/300/filtered-1m.vcf.gz  -r 'lcl|scaffold_26':8.25e6- > outputs/300/vcfs/26-region-1m.vcf
 bcftools view  outputs/300/filtered-1m.vcf.gz  -r 'lcl|scaffold_11':17e6- > outputs/300/vcfs/11-region-1m.vcf
+bcftools view  outputs/300/filtered-1m.vcf.gz  -r 'lcl|scaffold_11':19.5e6- > outputs/300/vcfs/11-region-19.5-1m.vcf
+bcftools view  outputs/300/filtered-1m.vcf.gz  -r 'lcl|scaffold_11':18e6- > outputs/300/vcfs/11-region-18-1m.vcf
 
 for f in *.vcf; do plink --vcf $f --r2 inter-chr --ld-window-r2 0.1 --out `basename $f vcf`ldf --allow-extra-chr --double-id; done;
 
@@ -339,16 +378,37 @@ lapply(files, plotLd)
 ```
 
 
-
 ```{r}
-lc<-read.delim("outputs/300/vcfs/lcl|scaffold_26.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.5)
+lc<-read.delim("outputs/300/vcfs/lcl|scaffold_4.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.6)
 
-  ggplot(lc) +
+pA<-  ggplot(lc) +
   geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
   scale_color_gradient(low="khaki1", high="red") + 
-  ggtitle("lcl|scaffold_26 LD")+
+  ggtitle("A")+
   theme_bw() +
-  theme(panel.grid = element_blank())
+  theme(panel.grid = element_blank()) +
+  xlab("SNP Position A") +
+  ylab("SNP Position B") +
+  theme(plot.title = element_text(hjust=0, size=16, face="bold")) 
+pA
+  
+ggsave("outputs/300/scaffold04-ld-plot.pdf")
+```
+
+
+```{r}
+lc<-read.delim("outputs/300/vcfs/lcl|scaffold_26.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.6)
+
+pB<-  ggplot(lc) +
+  geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle("B")+
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  xlab("SNP Position A") +
+  ylab("SNP Position B") +
+  theme(plot.title = element_text(hjust=0, size=16, face="bold")) 
+pB
   
 ggsave("outputs/300/scaffold26-ld-plot.pdf")
 ```
@@ -364,6 +424,53 @@ ggplot(lc2) +
   theme(panel.grid = element_blank())
 
 ```
+
+
+
+
+
+```{r}
+lc<-read.delim("outputs/300/vcfs/lcl|scaffold_11.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.6)
+
+pC<-  ggplot(lc) +
+  geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle("C")+
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  xlab("SNP Position A") +
+  ylab("SNP Position B") +
+  theme(plot.title = element_text(hjust=0, size=16, face="bold")) 
+pC
+  
+ggsave("outputs/300/scaffold11-ld-plot.pdf")
+
+
+lc2<-lc %>% filter(BP_A > 17e6)
+
+pD<-ggplot(lc2) +
+geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
+  scale_color_gradient(low="khaki1", high="red") + 
+  ggtitle("D")+
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  xlab("SNP Position A") +
+  ylab("SNP Position B") +
+  theme(plot.title = element_text(hjust=0, size=16, face="bold")) +
+  scale_x_continuous(labels = scales::label_scientific(digits = 2)) +
+  scale_y_continuous(labels = scales::label_scientific(digits = 2))
+
+  
+pD
+#20119207-20335395
+```
+
+```{r}
+ggarrange(pA, pB, pC, pD)
+
+ggsave("outputs/300/figure-2.pdf", width=10, height=8)
+```
+
 Getting region of interest
 bcftools view lcl\|scaffold_26.vcf.gz -r 'lcl|scaffold_26':8.25e6- > linkage-26.vcf
 
@@ -372,7 +479,7 @@ bcftools view lcl\|scaffold_26.vcf.gz -r 'lcl|scaffold_26':8.25e6- > linkage-26.
 ```{r}
 vcf<-read.vcfR(file="outputs/300/vcfs/26-region-1m.vcf")
 genind<-vcfR2genind(vcf)
-genind@pop<-as.factor(s144$Pop)
+genind@pop<-as.factor(s72$Pop)
 ```
 
 
@@ -386,6 +493,9 @@ df<-pca1$li
 df<-df %>% bind_cols(s72)
 
 eig<-pca1$eig/sum(pca1$eig)*100
+
+df$Pop<-factor(df$Pop, levels=c("ALVS","CHPI","SFBY","PETA","SUIB","HUMB","COLR","LWSH","PTLC","HRLC","SKNA","YBAK"))
+
 ```
 
 ```{r}
@@ -395,9 +505,10 @@ pc12<-ggplot(df) +
   xlab(paste0("PC1 ",round(eig[1],2), "%")) +
   ylab(paste0("PC2 ",round(eig[2],2), "%")) +
   theme(panel.grid = element_blank()) +
-  scale_fill_viridis_d(option="H") +
+  scale_fill_viridis_d(option="H", name = "Sampling Group") +
   guides(fill = guide_legend(override.aes = list(pch = 22))) +
-  theme(legend.position = "top") 
+  theme(legend.position = "bottom") 
+scaff26<-pc12
 pc12
 ggsave("outputs/300/scaffold-26-region-pca.jpeg")
 ```
@@ -449,12 +560,12 @@ Scaffold 11
 
 
 ```{r}
-lc<-read.delim("outputs/300/vcfs/lcl|scaffold_11.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.3)
+lc<-read.delim("outputs/300/vcfs/lcl|scaffold_11.ldf.ld",sep="",stringsAsFactors=FALSE) %>% as_tibble() %>% arrange(R2) %>%  filter(R2 >0.6)
 
   ggplot(lc) +
   geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
   scale_color_gradient(low="khaki1", high="red") + 
-  ggtitle("lcl|scaffold_26 LD")+
+  ggtitle("lcl|scaffold_11 LD")+
   theme_bw() +
   theme(panel.grid = element_blank())
   
@@ -467,7 +578,7 @@ lc2<-lc %>% filter(BP_A > 17e6)
 ggplot(lc2) +
   geom_point(aes(x=BP_A, y=BP_B, color=R2), alpha=0.5) +
   scale_color_gradient(low="khaki1", high="red") + 
-  ggtitle("lcl|scaffold_26 LD")+
+  ggtitle("lcl|scaffold_11 LD")+
   theme_bw() +
   theme(panel.grid = element_blank())
 
@@ -477,16 +588,73 @@ ggplot(lc2) +
 ddf<-read_tsv("outputs/300/snps-wgs-1m.geno.gz", col_names = c("FALSE")) %>% select(-X75)
 ddf[ddf==-1]<-NA
 ddf<-ddf %>% filter(`FALSE`=="lcl|scaffold_11")
-ddf2<-ddf %>% filter(X2 > 19e6)
+ddf2<-ddf %>% filter(X2 > 19.5e6)
 m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
+
 ```
 
 ```{r}
-as.ggplot(pheatmap(m, labels_row = ddf2$X2, labels_col = s72$ID,fontsize_row = 14, fontsize_col = 9)) +
+genos<-read_csv("outputs/304/genotypes.csv")
+genos<-s72 %>% left_join(genos, by=c("ID"="Ind")) %>% mutate(Genotype=ifelse(ID %in% c("HUMB_007","HUMB_008","HUMB_004"),"Het",Genotype))
+genos<-genos %>% mutate(NewGeno=ifelse(Genotype=="RHom","RHom", ifelse(Genotype=="Het","Het","AHom")))
+genos$NewGeno<-replace_na(genos$NewGeno,"AHom")
+annot11<-as.data.frame(genos %>% select(NewGeno) )
+annot11$Genotype<-annot11$NewGeno
+annot11<-annot11 %>% select(-NewGeno)
+rownames(annot11)<-colnames(m)
+
+colors11<-viridis::viridis(3, option="cividis")
+ann11_colors = list(
+  Genotype = c( AHom=colors11[1],Het=colors11[2], RHom=colors11[3]))
+
+```
+
+```{r}
+as.ggplot(pheatmap(m, labels_row = ddf2$X2, labels_col = s72$ID,fontsize_row = 14, fontsize_col = 11,
+                   annotation_col = annot11, annotation_colors = ann11_colors, color = viridis(3,option="magma"))) +
   ggtitle("Heatmap of Longfin Smelt Variants on scaffold_11\n") + 
   theme(plot.title = element_text(hjust=0.5))
-ggsave("outputs/300/lfs-11-heatmap-1m.pdf", width=20, height=12)
+ggsave("outputs/300/lfs-11-heatmap-1m.pdf", width=20, height=8)
+ggsave("outputs/300/figure-4.pdf", width=20, height=8)
+
 ```
+
+```{r}
+#vcf<-read.vcfR(file="outputs/300/vcfs/11-region-1m.vcf")
+vcf<-read.vcfR(file="outputs/300/vcfs/11-region-19.5-1m.vcf")
+#vcf<-read.vcfR(file="outputs/300/vcfs/11-region-18-1m.vcf")
+genind<-vcfR2genind(vcf)
+genind@pop<-as.factor(s72$Pop)
+```
+
+
+```{r}
+gen<-genind
+X <- tab(gen, NA.method="mean")
+
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE,nf=3)
+
+df<-pca1$li
+df<-df %>% bind_cols(s72)
+
+eig<-pca1$eig/sum(pca1$eig)*100
+```
+
+```{r}
+pc12<-ggplot(df) + 
+  geom_point(aes(x=Axis1, y=Axis2, fill=genos$NewGeno), alpha=0.75, cex=2, pch=21) +
+  theme_bw() +
+  xlab(paste0("PC1 ",round(eig[1],2), "%")) +
+  ylab(paste0("PC2 ",round(eig[2],2), "%")) +
+  theme(panel.grid = element_blank()) +
+  scale_fill_viridis_d(option="cividis", name = "Candidate Chromosomal\nInversion Genotype") +
+  guides(fill = guide_legend(override.aes = list(pch = 22))) +
+  theme(legend.position = "bottom") 
+scaff11<-pc12
+ggsave("outputs/300/scaffold-11-region-pca.jpeg")
+```
+
+
 
 #Chrom PCS
 
@@ -882,3 +1050,110 @@ conda deactivate
 iqtree2  -nt AUTO -m MFP+ASC -bb 1000 -s filtered-phylo.min4.phy --seqtype DNA --redo
 iqtree2  -nt AUTO -m MFP+ASC -bb 10000 -s filtered-phylo.min4.phy.varsites.phy --seqtype DNA --redo
 
+# Region 26
+
+```{r}
+snps<-import.snpR.data(genotypes = "outputs/300/vcfs/26-region-1m.vcf", 
+      sample.meta = s72 %>% select(Pop))
+```
+
+```{r}
+p <- plot_clusters(snps, facets = c("Pop"), viridis.option = "H")
+p$plot$pca
+sexmeta<-p$data$pca %>% select(Pop, .sample.id, PC1) %>% mutate(Sex=ifelse(PC1 > 0, "Male","Female"))
+```
+```{r}
+ddf<-p$data$pca %>% as_tibble()
+ddf<-ddf %>% left_join(sexmeta)
+ddf$Pop<-factor(ddf$Pop, levels=c("ALVS","CHPI","SFBY","PETA","SUIB","HUMB","COLR","LWSH","PTLC","HRLC","SKNA","YBAK"))
+magma<-viridis(3,option="magma")
+p12<-ggplot(ddf) +
+  geom_point(aes(x=PC1, y=PC2, fill=Sex), pch=21, alpha=.75) +
+  xlab(paste0("PC1 ", p$pca_loadings[1],"%")) +
+  ylab(paste0("PC2 ", p$pca_loadings[2],"%")) +
+  scale_fill_manual(values=c("purple","orange") )+
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  ggtitle("A") +
+  theme(plot.title = element_text(hjust=0, size=16, face="bold")) 
+
+panel3A<-p12
+p12
+```
+```{r}
+ddf %>% group_by(Sex) %>% summarize(Count=n())
+```
+```{r}
+hets<-calc_hs(snps)
+ho<-get.snpR.stats(hets, stats="hs")
+ddf2<-left_join(ddf,ho$sample)
+```
+
+```{r}
+panel3B<-ggplot(ddf2) +
+  geom_boxplot(aes(x=Sex, y=hs, fill=Sex)) +
+  ylab("Mean Heterozygosity") +
+  xlab("Candidate Sex") +
+  scale_fill_manual(values=c("purple","orange")) +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  ggtitle("B") +
+  theme(plot.title = element_text(hjust=0, size=16, face="bold")) 
+
+
+panel3B
+```
+
+
+Scaffold 11
+
+# Region 11
+vcf<-read.vcfR(file="outputs/300/vcfs/11-region-19.5-1m.vcf")
+
+```{r}
+panel3C<-scaff11 + theme(legend.position = "right") +
+    scale_fill_viridis_d(option="cividis", name ="Candidate CI\n Genotype") +
+  ggtitle("C") +
+  theme(plot.title = element_text(hjust=0, size=16, face="bold")) 
+
+panel3C
+```
+
+```{r}
+snps<-import.snpR.data(genotypes = "outputs/300/vcfs/11-region-19.5-1m.vcf", 
+      sample.meta = genos %>% select(NewGeno))
+```
+
+
+```{r}
+hets<-calc_hs(snps)
+ho<-get.snpR.stats(hets, stats="hs")
+sampleSizes<-ho$sample %>% group_by(NewGeno) %>% summarize(Count=n())
+```
+
+```{r}
+panel3D<-ggplot(ho$sample) +
+  geom_boxplot(aes(x=NewGeno, y=hs, fill=NewGeno), alpha=0.85) +
+  geom_text(data=sampleSizes,aes(x=NewGeno, label=paste0("n = ",Count)),y=3.26)+
+  ylab("Mean Heterozygosity") +
+  xlab("Candidate Chromosomal Inversion Genotype") +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  scale_fill_viridis_d(option="cividis", name ="Candidate CI\n Genotype") +
+  ggtitle("D") +
+  theme(plot.title = element_text(hjust=0, size=16, face="bold")) 
+
+
+panel3D
+```
+  
+Putting it together
+
+```{r}
+ggarrange(panel3A, panel3B, panel3C, panel3D)
+
+ggsave("outputs/300/figure-3.pdf", width=11, height=8.5)
+ggsave("outputs/300/figure-3.jpeg", width=11, height=8.5)
+
+```
+  

@@ -513,22 +513,42 @@ obj
 sqrt(((0.93*(1-0.93))/14))
 ```
 ```{r}
-obj2<-obj %>% filter(Class != "FW")
+obj2<-obj %>% filter(Class != "FW") %>% arrange(Class) %>% mutate(Step=1:n())
+obj2
 ```
 ```{R}
 ggplot(obj2) +
-  geom_segment(aes(x=Class, xend=Class, y=Frequency-Error, yend=Frequency+Error)) +
-  geom_point(aes(x=Class, y=Frequency)) +
-  geom_text(aes(x=Class, y=Frequency+Error+0.02, label=paste0("n = ",N))) +
+  geom_segment(aes(x=Step, xend=Step, y=Frequency-Error, yend=Frequency+Error)) +
+  geom_point(aes(x=Step, y=Frequency)) +
+  #geom_smooth(aes(x=Step, y=Frequency), method='lm') +
+  geom_text(aes(x=Step, y=Frequency+Error+0.02, label=paste0("n = ",N))) +
   ylim(0,1.05) +
   ylab("Frequency of Ancestral Form\n") +
-  xlab("\nPhenotypic Class - clust_name_100") +
+  xlab("\nPhenotypic Class") +
   theme_bw() +
   theme(panel.grid=element_blank()) +
   theme(axis.text=element_text(size=12)) +
-  theme(axis.title=element_text(face="bold"))
+  theme(axis.title=element_text(face="bold", size=16)) +
+  scale_x_continuous(breaks=c(1,2,3), labels = c("LS","MS","HS"), limits = c(0.5,3.5))
 
 ggsave("outputs/303/life-history-fish-chrom11.jpeg", width=8, height=6)
+ggsave("outputs/303/figure-5.jpeg", width=8, height=6)
+
+```
+
+```{r}
+l <- lm(Frequency ~ Step, data = obj2)
+summary(l)
+```
+
+```{r}
+tdf<-mlf %>% filter(Pheno !="FW") %>% filter(Pheno !="MS")
+tdf<-na.omit(tdf)
+
+test <- chisq.test(table(tdf$Pheno, tdf$value))
+
+ktest<-kruskal.test(value ~ Pheno, data=tdf )
+round(ktest$p.value, 2)
 ```
 
 ```{r}
@@ -910,4 +930,35 @@ ggplot(p3) +
   scale_color_manual(values=mycolors) +
   ylab("MDS3") +
   xlab("Chromosome")
+```
+
+Plot of error
+```{r}
+Frequency<-c(0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0)
+freq6<-as.tibble(Frequency) %>% rename(Frequency=value) %>% mutate(N=6) %>% mutate(Error=sqrt((Frequency*(1-Frequency))/(2*N )))
+freq12<-as.tibble(Frequency) %>% rename(Frequency=value) %>% mutate(N=12) %>% mutate(Error=sqrt((Frequency*(1-Frequency))/(2*N )))
+freq<-bind_rows(freq6,freq12)
+
+ggplot(freq) +
+  geom_segment(aes(x=Frequency, xend=Frequency, y=Frequency-Error, yend=Frequency+Error)) +
+  geom_point(aes(x=Frequency, y=Frequency)) +
+  ylab("Error") +
+  facet_wrap(.~N)
+
+```
+```{r}
+#MAF of 0.05 and ten sample
+(1-0.05)^10
+
+(1-0.05)^24
+```
+
+https://pmc.ncbi.nlm.nih.gov/articles/PMC3440332/#:~:text=Question%201:%20How%20many%20individuals,at%20a%20frequency%20of%200.05.
+
+The probability of detecting an allele that occurs at a frequency of 0.05 in the empirical dataset in each simulated dataset can be calculated by taking one minus the probability of non-detection, which is 1−(0.95)^2n where n equals the number of chromosomes in the sample. From this, we can determine that the sample size needed for at least a 95% probability of detecting an allele that occurs at a frequency of 0.05 is 30 diploid individuals.
+
+```{r}
+round(1-(0.95^60),3)
+
+round(1-(0.9^30),3)
 ```

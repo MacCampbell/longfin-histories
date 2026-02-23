@@ -67,7 +67,7 @@ Next 90% threshold
 
 ```{sh, eval=FALSE}
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
--minInd 73 -bam bamlists/combined.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
+-minInd 69 -bam bamlists/combined.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
 -rf /home/maccamp/genomes/longfin-polished/1mbseqs.txt \
 -out outputs/305/snps-wgs  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
@@ -79,6 +79,9 @@ srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task
 -out outputs/305/snps-wgs-2  \
 -minMaf 0.05 -minMapQ 20 -minQ 20 -GL 1 -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 \
 -doGeno 2 -doPost 1 -postCutoff 0.9 -doPlink 2  > outputs/305/snps-2.out 2> outputs/305/snps-2.err &
+
+#70630 variants and 100 people pass filters and QC.
+
 
 srun -t 12:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 $HOME/angsd/angsd -nthreads 12 \
 -minInd 110 -bam bamlists/combined3.bamlist -ref /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa \
@@ -119,7 +122,7 @@ paste \
 
 ```{r}
 miss<-read_tsv("outputs/305/missingness.stats", col_names=c("SampleID","Missingness"))
-m22<-m2 %>% select(-Missingness) %>% left_join(miss, by=c("SampleID"="SampleID"))
+m22<-m2 %>% left_join(miss, by=c("SampleID"="SampleID"))
 m22<- m22 %>% dplyr::filter(Missingness<0.10)
 m22 %>% select(SampleID) %>% write_tsv("outputs/305/m22.names", col_names = FALSE)
 ```
@@ -248,7 +251,7 @@ loadings
 loadings$Position<-gsub("lcl\\|.*_|\\.\\d$","",loadings$Allele)
 loadings$Position<-as.numeric(loadings$Position)
 loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
-tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .2) %>% select(-CS2, -CS3) %>% 
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .3) %>% select(-CS2, -CS3) %>% 
   mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
 
 tops %>% relocate(Chrom, Position, CS1)
@@ -263,6 +266,14 @@ tops %>% relocate(Chrom, Position, CS1)
 vcf<-read.vcfR(file="outputs/305/vcfs/11-region.vcf")
 genind<-vcfR2genind(vcf)
 genind@pop<-as.factor(m22$Pop)
+
+```
+
+```{R, eval=FALSE}
+tidy<-vcfR2tidy(vcf)
+
+t<-tidy$gt %>% separate(gt_GT, into=c("a1","a2"), sep="/") %>% mutate(Value=ifelse(a1 %in% c(0,1),as.numeric(a1)+as.numeric(a2), NA)) %>% select(Indiv, POS, Value)
+
 ```
 
 
@@ -296,34 +307,49 @@ ggsave("outputs/305/scaffold-11-region-pca.jpeg")
 
 # Heatmaps of key regions
 
+
+
 ```{r}
 ddf<-read_tsv("outputs/305/snps-wgs-2.geno.gz", col_names = c("FALSE")) %>% select(-X103)
 ddf[ddf==-1]<-NA
-ddf<-ddf %>% filter(`FALSE`=="lcl|scaffold_26")
-ddf2<-ddf %>% filter(X2 %in% tops$Position)
-m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
+
+colnames(ddf)<-c("Chrom","Position",m2$SampleID)
+
+
+ddf<-ddf %>% filter(Chrom=="lcl|scaffold_26")
+ddf2<-ddf %>% filter(Position %in% tops$Position)
+missers<-miss %>% filter(Missingness > 0.1)
+
+ddf2<-select(ddf2, -missers$SampleID)
+
+
+m<-ddf2 %>% select(-Chrom, -Position) %>% as.matrix()
+
 annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
 
-annot$Sex<-m2$Sex
+annot$Sex<-m22$Sex
 #annot$Pop<-m2$Pop
 ann_colors = list(
   Sex = c( Female="purple",Male="orange",UNK="grey"))
 
+m22 %>% arrange(Sex) %>% group_by(Sex) %>% summarize(Median=median(Dedup))
 ```
 
 ```{r}
 as.ggplot(pheatmap(m, cluster_rows = FALSE, annotation_col = annot, color = viridis(3,option="magma", alpha=0.9), annotation_colors =  ann_colors,
-                   labels_col = m2$SampleID, labels_row = ddf2$X2, fontsize_row = 14, fontsize_col = 8)) +
-  ggtitle("Heatmap of Longfin Smelt Variants on scaffold_26\n") + 
+                   labels_col = m22$SampleID, labels_row = ddf2$Position, fontsize_row = 12, fontsize_col = 8)) +
+  #ggtitle("Heatmap of Longfin Smelt Variants on scaffold_26\n") + 
   theme(plot.title = element_text(hjust=0.5))
-ggsave("outputs/305/lfs-sex-heatmap.pdf", width=20, height=12)
+ggsave("outputs/305/supplemental-figure-s2.pdf", width=20, height=8)
+ggsave("outputs/305/supplemental-figure-s2.jpeg", width=20, height=8)
+
 ```
 
 
 Scaffold 11
 
 ```{r}
-ddf<-read_tsv("outputs/305/snps-wgs.geno.gz", col_names = FALSE) %>% select(-X83)
+ddf<-read_tsv("outputs/305/snps-wgs-3.geno.gz", col_names = FALSE) %>% select(-X83)
 ddf[ddf==-1]<-NA
 ddf<-ddf %>% filter(X1=="lcl|scaffold_11")
 ddf2<-ddf %>% filter(X2 > 19e6)

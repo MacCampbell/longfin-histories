@@ -1,0 +1,121 @@
+---
+title: "306-assembly"
+output: html_document
+date: "2025-12-02"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+using minimap to align the haps to the reference
+
+
+/home/skieran/lfs/genome/assembly_stuff/Subset03/smelt.10000.sub03.asm.bp.hap1.p_ctg.fasta.gz
+
+/home/skieran/lfs/genome/assembly_stuff/Subset03/smelt.10000.sub03.asm.bp.hap2.p_ctg.fasta.gz
+
+Creating a syntenic map with minimap
+
+in outputs/306
+
+```{sh, eval=FALSE}
+ln -s /home/skieran/lfs/genome/assembly_stuff/Subset03/smelt.10000.sub03.asm.bp.hap1.p_ctg.fasta.gz .
+ln -s /home/skieran/lfs/genome/assembly_stuff/Subset03/smelt.10000.sub03.asm.bp.hap2.p_ctg.fasta.gz .
+ln -s /home/maccamp/genomes/longfin-polished/lfs_run3_scaffolds_final.fa .
+
+conda activate hifiasm
+srun -p bigmemm -t 16:00:00 --mem=128GB --nodes=1 --cpus-per-task 12 minimap2 -x asm5 smelt.10000.sub03.asm.bp.hap1.p_ctg.fasta.gz lfs_run3_scaffolds_final.fa | cut -f 1-12 > hap1-ref.sam  &
+srun -p bigmemh -t 16:00:00 --mem=128GB --nodes=1 --cpus-per-task 12 minimap2 -x asm5 smelt.10000.sub03.asm.bp.hap2.p_ctg.fasta.gz lfs_run3_scaffolds_final.fa | cut -f 1-12 > hap2-ref.sam &
+srun -p bigmemh -t 16:00:00 --mem=128GB --nodes=1 --cpus-per-task 12 minimap2 -x asm5 smelt.10000.sub03.asm.bp.hap1.p_ctg.fasta.gz smelt.10000.sub03.asm.bp.hap2.p_ctg.fasta.gz | cut -f 1-12 > hap1-hap2.sam &
+
+# Need sequence lengths
+gunzip -c smelt.10000.sub03.asm.bp.hap1.p_ctg.fasta.gz  > hap1.fasta
+gunzip -c smelt.10000.sub03.asm.bp.hap2.p_ctg.fasta.gz  > hap2.fasta
+samtools faidx hap1.fasta
+samtools faidx hap2.fasta
+samtools faidx lfs_run3_scaffolds_final.fa
+```
+
+`(hifiasm) maccamp@farm:~/longfin-histories/outputs/306$ wc -l hap1.fasta.fai `   
+2331 hap1.fasta.fai
+
+`(hifiasm) maccamp@farm:~/longfin-histories/outputs/306$ wc -l hap2.fasta.fai ` 
+1759 hap2.fasta.fai
+
+We need to figure out contigs that align to lcl|scaffold_11 > 17e6 bp from hap1 and hap2 to reference
+
+Then compare the key region to each other on the reference
+
+
+%>% filter(MatchLength > 100000) %>% filter(MatchQuality>=60) %>% mutate(Ids=1:n())
+
+```{r}
+hap1<-read_tsv("outputs/306/hap1-ref.sam", col_names = c("QueryName","QueryLength","QueryStart",	"QueryEnd",	"Direction","TargetName","TargetLength","TargetStart","TargetEnd","MatchingBases","MatchLength",	"MatchQuality"))  %>% mutate(Query="ref") %>% mutate(Target="hap1") %>% filter(MatchQuality>=50)
+hap1 %>% filter(QueryName=="lcl|scaffold_11") %>% filter(QueryStart > 15e6)
+```
+```{r}
+hap2<-read_tsv("outputs/306/hap2-ref.sam", col_names = c("QueryName","QueryLength","QueryStart",	"QueryEnd",	"Direction","TargetName","TargetLength","TargetStart","TargetEnd","MatchingBases","MatchLength",	"MatchQuality"))  %>% mutate(Query="ref") %>% mutate(Target="hap2") %>% filter(MatchQuality>=50)
+hap2 %>% filter(QueryName=="lcl|scaffold_11") %>% filter(QueryStart > 15e6)
+```
+  
+  
+```{r}
+hap1<-read_tsv("outputs/306/hap1-hap2.sam", col_names = c("QueryName","QueryLength","QueryStart",	"QueryEnd",	"Direction","TargetName","TargetLength","TargetStart","TargetEnd","MatchingBases","MatchLength",	"MatchQuality"))  %>% mutate(Query="hap2") %>% mutate(Target="hap1") %>% filter(MatchQuality>=50)
+hap1 %>% filter(TargetName %in% c("h1tg000156l","h1tg000015l") )
+```
+
+Pretty sure this thing is a hom for the region...
+h1tg000156l vs h2tg000060l 
+
+creating a lastz environment
+conda activate lastz
+mamba install bioconda::lastz
+
+   printf OUTFILE "lastz ./data/$species/$species-$a[0].fasta ./data/$species/$species-$a[1].fasta --chain --gapped --gfextend --identity=75.0..100.0 --matchcount=100 --format=general --rdotplot=./outputs/101/$species-$a[0]-$a[1]-dotplot.txt --ambiguous=iupac --exact=20 > ./outputs/101/$species-$a[0]-$a[1].out\n";
+
+```{sh,eval=FALSE}
+samtools faidx hap1.fasta h1tg000156l  > h1tg000156l.fasta
+samtools faidx hap2.fasta h2tg000060l  > h2tg000060l.fasta 
+srun -p high -t 4:00:00 --mem=32GB --nodes=1 --cpus-per-task 4 lastz  h1tg000156l.fasta h2tg000060l.fasta --chain --gapped --gfextend --identity=75.0..100.0 --matchcount=100 --format=general --rdotplot=hap1-hap2-dotplot.txt --exact=20 > lastz.out
+```
+
+
+```{r}
+df<-read_tsv("outputs/306/lastz.bak")
+
+ggplot(df) + 
+  geom_segment(aes(x=zstart1,xend=end1,y=zstart2, yend=end2, color=strand2)) + theme_bw() +
+  xlab("hap1 h1tg000156l") +
+  ylab("hap2 h2tg000060l") +
+  theme(panel.grid = element_blank())
+ggsave("outputs/306/lastz.jpeg")
+```
+
+
+```{r}
+d1<-hap1 %>% filter(QueryName=="lcl|scaffold_11") %>% filter(QueryStart > 15e6)
+
+ggplot(d1) + 
+  geom_segment(aes(x=QueryStart,xend=QueryEnd,y=TargetStart, yend=TargetEnd, color=Direction)) + theme_bw() +
+  xlab("Query") +
+  ylab("Target") +
+  theme(panel.grid = element_blank())
+
+```
+
+
+```{r}
+d2<-hap2 %>% filter(QueryName=="lcl|scaffold_11") %>% filter(QueryStart > 15e6)
+
+ggplot(d2) + 
+  geom_segment(aes(x=QueryStart,xend=QueryEnd,y=TargetStart, yend=TargetEnd, color=Direction)) + theme_bw() +
+  xlab("Query") +
+  ylab("Target") +
+  theme(panel.grid = element_blank())
+
+```

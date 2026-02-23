@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 
 ```{r}
 library(ape)
+library(viridis)
 library(vcfR)
 library(adegenet)
 library(tidyverse)
@@ -187,7 +188,7 @@ loadings
 loadings$Position<-gsub("lcl\\|.*_|\\.\\d$","",loadings$Allele)
 loadings$Position<-as.numeric(loadings$Position)
 loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
-tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .3) %>% select(-CS2, -CS3) %>% 
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .4) %>% select(-CS2, -CS3) %>% 
   mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
 
 tops %>% relocate(Chrom, Position, CS1)
@@ -204,13 +205,15 @@ ddf2<-ddf %>% filter(X2 %in% tops$Position)
 m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
 annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
 
-annot$Sex<-annotcols$Sex
+annot$`Candidate Sex`<-annotcols$Sex
 annot
+ann_colors = list(
+  `Candidate Sex` = c( Female="purple",Male="orange"))
 ```
 
 ```{r}
-as.ggplot(pheatmap(m, cluster_rows = TRUE, annotation_col = annot,
-                   labels_col = sfb$ID, labels_row = ddf2$X2, fontsize_row = 14, fontsize_col = 9)) +
+as.ggplot(pheatmap(m, cluster_rows = FALSE, annotation_col = annot, color = viridis(3,option="magma", alpha=0.9), annotation_colors =  ann_colors,
+                   labels_col = sfb$ID, labels_row = ddf2$X2, fontsize_row = 14, fontsize_col = 12)) +
   ggtitle("Heatmap of Longfin Smelt Variants on scaffold_26\n") + 
   theme(plot.title = element_text(hjust=0.5))
 ggsave("outputs/304/lfs-sex-heatmap-1m.pdf", width=20, height=12)
@@ -218,24 +221,6 @@ ggsave("outputs/304/lfs-sex-heatmap-1m.pdf", width=20, height=12)
 
 
 Scaffold 11
-
-```{r}
-ddf<-read_tsv("outputs/304/snps-wgs.geno.gz", col_names = c("FALSE")) %>% select(-X29)
-ddf[ddf==-1]<-NA
-ddf<-ddf %>% filter(`FALSE`=="lcl|scaffold_11")
-ddf2<-ddf %>% filter(X2 > 20e6)
-m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
-```
-
-```{r}
-
-as.ggplot(pheatmap(m, labels_row = ddf2$X2, labels_col = sfb$ID,fontsize_row = 14, fontsize_col = 9)) +
-  ggtitle("Heatmap of Longfin Smelt Variants on scaffold_11\n") + 
-  theme(plot.title = element_text(hjust=0.5))
-ggsave("outputs/304/lfs-11-heatmap.pdf", width=12, height=8)
-
-```
-
 
 ```{r}
 vcf<-read.vcfR(file="outputs/304/vcfs/11-region-1m.vcf")
@@ -258,6 +243,10 @@ eig<-pca1$eig/sum(pca1$eig)*100
 
 ```{r}
 df<-df %>% mutate(Genotype=ifelse(Axis1 >2, "RHom", ifelse(Axis1 > 0 & Axis1 < 2, "Het","AHom" )))
+
+genos<-df %>% select(Genotype)
+genos$Ind<-rownames(df)
+genos %>% write_csv("outputs/304/genotypes.csv")
 df %>% group_by(Genotype, Pop) %>% summarize(Count=n())
 pc12<-ggplot(df) + 
   geom_point(aes(x=Axis1, y=Axis2, fill=Genotype), alpha=0.75, cex=2, pch=21) +
@@ -265,7 +254,7 @@ pc12<-ggplot(df) +
   xlab(paste0("PC1 ",round(eig[1],2), "%")) +
   ylab(paste0("PC2 ",round(eig[2],2), "%")) +
   theme(panel.grid = element_blank()) +
-  scale_fill_viridis_d(option="H") +
+  scale_fill_viridis_d(option="cividis") +
   guides(fill = guide_legend(override.aes = list(pch = 22))) +
   theme(legend.position = "top") 
 pc12
@@ -282,12 +271,38 @@ loadings
 loadings$Position<-gsub("lcl\\|.*_|\\.\\d$","",loadings$Allele)
 loadings$Position<-as.numeric(loadings$Position)
 loadings$Chrom<-gsub("_\\d+\\.[0|1]","",loadings$Allele)
-tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .3) %>% select(-CS2, -CS3) %>% 
+tops<-loadings %>% arrange(-CS1) %>% slice_max(order_by = CS1,prop = .2) %>% select(-CS2, -CS3) %>% 
   mutate(MajorMinor=gsub("lcl\\|*\\.","",Allele)) 
 
 tops %>% relocate(Chrom, Position, CS1)
+tops
+```
+
+```{r}
+ddf<-read_tsv("outputs/304/snps-wgs.geno.gz", col_names = c("FALSE")) %>% select(-X29)
+ddf[ddf==-1]<-NA
+ddf<-ddf %>% filter(`FALSE`=="lcl|scaffold_11")
+ddf2<-ddf %>% filter(X2  %in% tops$Position)
+m<-ddf2 %>% select(-`FALSE`, -X2) %>% as.matrix()
+annot11<-df %>% select(Genotype) 
+rownames(annot11)<-colnames(m)
+
+colors11<-viridis(3, option="cividis")
+ann11_colors = list(
+  Genotype = c( AHom=colors11[1],Het=colors11[2], RHom=colors11[3]))
 
 ```
+
+```{r}
+
+as.ggplot(pheatmap(m, labels_row = ddf2$X2, labels_col = sfb$ID,fontsize_row = 14, annotation_col = annot11, annotation_colors = ann11_colors,
+                    fontsize_col = 9, color = viridis(3,option="magma"))) +
+  ggtitle("Heatmap of Longfin Smelt Variants on scaffold_11\n") + 
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/304/lfs-11-heatmap.pdf", width=12, height=7)
+
+```
+
 
 Heterozygosity?
 

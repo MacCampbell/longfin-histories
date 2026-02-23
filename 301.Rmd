@@ -32,7 +32,10 @@ sag
 ggplot(sag) +
   geom_point(aes(x=Dedup, y=Missing, fill=Pop), pch=21) +
   #facet_wrap(.~Pop) +
-   xlim(0,5e5)
+   xlim(0,1e6) +
+  theme_bw()
+
+ggsave("outputs/301/missing.jpeg")
 ```
 
 ```{r}
