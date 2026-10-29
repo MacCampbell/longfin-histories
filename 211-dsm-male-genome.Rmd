@@ -251,6 +251,8 @@ ggplot(lrts %>% filter(Chromosome %in% c("JAJTCG010000045.1","CM038964.1"))) + g
   theme(plot.title = element_text(hjust=0.5))
 
 ggsave("outputs/211/male-prelim-sex-gwas-all-chroms.jpeg", width=14, height=14)
+
+tops<-lrts %>% arrange(-log10p) %>% head(n=20)
 ```
 
 
@@ -319,9 +321,15 @@ srun -t 2:00:00 -p high --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=
 -doGeno 2 -doPost 1 -postCutoff 0.95 -doPlink 2  > outputs/211/snps.out 2> outputs/211/snps.err &
 ```
 
+We have 38 females and 42 males
+The MAF should be 42 (38*2 + 42) ~ 0.36
+
+
+14161124
+
 Need a frequency of < .25
 ```{r}
- CM038964 %>% arrange(Frequency)
+ CM038964 %>% arrange(Frequency) %>% arrange(-LRT)
 ```
 
 14181148 is fairly close
@@ -352,3 +360,39 @@ p$plot$pca
 ```
 
 CM038964.1	14161124	CM038964.1_14161124	G	A	.	.	PR	GT	0/0	0/0	0/0	0/1	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/1	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/1	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/1	0/1	0/1	0/1	0/0	0/0	0/0	0/0	0/1	0/1	0/1	0/1	0/0	0/1	0/1	0/0	0/1	0/0	0/0	0/1	0/1	0/1	0/0	0/1	0/1	0/1	0/0	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1	0/1
+
+```{r}
+ddf<-read_tsv("outputs/211/snps-CM038964.geno.gz", col_names = c("FALSE")) %>% select(-X83)
+ddf[ddf==-1]<-NA
+
+colnames(ddf)<-c("Chrom","Position",m80$Sample)
+
+
+#ddf<-ddf %>% filter(Chrom=="SUPER_10")
+ddf2<-ddf %>% filter(Position %in% tops$Position)
+#missers<-miss %>% filter(Missingness > 0.1)
+#ddf2<-select(ddf2, -missers$SampleID)
+
+
+m<-ddf2 %>% select(-Chrom, -Position) %>% as.matrix()
+
+annot<-data.frame(sample=as.character(colnames(m))) %>% column_to_rownames("sample")
+
+annot$Sex<-m80$SexChar
+#annot$Pop<-m2$Pop
+ann_colors = list(
+  Sex = c( female="purple",male="orange",UNK="grey"))
+
+```
+
+```{r}
+as.ggplot(pheatmap(m, cluster_rows = FALSE, annotation_col = annot, color = viridis(3,option="magma", alpha=0.9), annotation_colors =  ann_colors,
+                   labels_col = m80$Sample, labels_row = ddf2$Position, fontsize_row = 12, fontsize_col = 8)) +
+  #ggtitle("Heatmap of Longfin Smelt Variants on scaffold_26\n") + 
+  theme(plot.title = element_text(hjust=0.5))
+ggsave("outputs/211/dsm-male-sex-heatmap.pdf", width=20, height=16)
+ggsave("outputs/211/dsm-male-sex-heatmap.jpeg", width=20, height=16)
+
+```
+
+

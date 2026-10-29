@@ -10,6 +10,8 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message=FALSE)
 
 ```{r}
 library(tidyverse)
+library(ggplotify)
+library(pheatmap)
 ```
 
 Let's pull out the existing gwas stuff from https://github.com/MacCampbell/dsm-omics/blob/main/300-gwas.Rmd

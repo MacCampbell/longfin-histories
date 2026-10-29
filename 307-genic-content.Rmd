@@ -1,0 +1,124 @@
+---
+title: "307-genic-content"
+output: html_document
+date: "2026-05-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+Looking at the genic content
+
+Scaffold 11 	20369161	
+CM126176.2 20,369,161 bp
+
+Annotations in CM126176.2
+
+Pulled these and made a table.
+
+We can search Dennis et al.'s candidate sex gene list in outputs/307
+
+ cat dennis-gene-list.txt | cut -f 1 -d ' ' | while read line; do grep $line ~/genomes/dsm/GCF_021917145.1_fHypTra1_genomic.gff >> sex-hits.txt; done;
+ 
+ (base) ➜  307 git:(main) ✗ cut -f 1 sex-hits.txt | sort | uniq -c
+ 406 NC_061060.1
+ 306 NC_061061.1
+  81 NC_061062.1
+  97 NC_061063.1
+  18 NC_061064.1
+ 164 NC_061065.1
+  36 NC_061066.1
+  71 NC_061067.1
+  18 NC_061068.1
+  99 NC_061070.1
+ 174 NC_061072.1
+ 120 NC_061073.1
+   4 NC_061074.1
+ 120 NC_061075.1
+  68 NC_061076.1
+  12 NC_061077.1
+  91 NC_061078.1
+  12 NC_061080.1
+  23 NC_061081.1
+ 112 NC_061082.1
+ 141 NC_061083.1
+  69 NC_061084.1
+ 126 NC_061085.1
+  66 NW_025813708.1
+  18 NW_025813713.1
+   6 NW_025813796.1
+  42 NW_025813837.1
+   8 NW_025814008.1
+  48 NW_025814036.1
+
+Sex GWAS places it NC_061078
+
+NC_061078.1	3897	16735	ID=gene-zdhhc13;Dbxref=GeneID:124482170;Name=zdhhc13;gbkey=Gene;gene=zdhhc13;gene_biotype=protein_coding
+NC_061078.1	6507845	6518141	ID=gene-zdhhc7;Dbxref=GeneID:124482075;Name=zdhhc7;gbkey=Gene;gene=zdhhc7;gene_biotype=protein_coding
+NC_061078.1	8759104	8769920	ID=gene-hsd17b12b;Dbxref=GeneID:124482167;Name=hsd17b12b;gbkey=Gene;gene=hsd17b12b;gene_biotype=protein_coding
+NC_061078.1	5407430	5412261	ID=gene-stard5;Dbxref=GeneID:124482101;Name=stard5;gbkey=Gene;gene=stard5;gene_biotype=protein_coding
+NC_061078.1	6051392	6053761	ID=gene-tipin;Dbxref=GeneID:124481758;Name=tipin;gbkey=Gene;gene=tipin;gene_biotype=protein_coding;partial=true;start_range=.,6051392
+
+These aren't in the region of association.
+
+
+The region is 8.25e6- from scaffold26 
+
+Col	Type	Description
+1	string	Query sequence name
+2	int	Query sequence length
+3	int	Query start coordinate (0-based)
+4	int	Query end coordinate (0-based)
+5	char	‘+’ if query/target on the same strand; ‘-’ if opposite
+6	string	Target sequence name
+7	int	Target sequence length
+8	int	Target start coordinate on the original strand
+9	int	Target end coordinate on the original strand
+10	int	Number of matching bases in the mapping
+11	int	Number bases, including gaps, in the mapping
+12	int	Mapping quality (0-255 with 255 for missing)
+
+```{r}
+dd<-read_tsv("outputs/307/lfs_chr_26_paf.txt", col_names = c("Query","QueryLength","QueryStart","QueryEnd","Dir","Target","TargetLength",
+                                                             "TargetStart","TargetEnd","MatchBases","MatchLength","MapQ"))
+dd %>% filter(QueryStart > 8.25e6) %>% filter(MatchBases>1000) %>% filter(Target=="NC_061079.1")
+```
+```{r}
+genes<-read_tsv("outputs/307/NC_061079.genes", skip = 1, col_names = FALSE) 
+genes %>% filter(X4 > 644982) %>% filter(X5 < 1492977) %>% filter(X3=="gene") 
+genes %>% filter(X4 > 1502766) %>% filter(X5 < 1626247)
+```
+
+base) ➜  307 git:(main) ✗ cut -f 1 -d ' ' dennis-gene-list.txt | while read line; do grep $line NC_061079.genes; done;
+(base) ➜  307 git:(main) ✗ 
+
+# CI
+```{r}
+d11<-read_tsv("outputs/307/lfs_chr_11_paf.txt", col_names = c("Query","QueryLength","QueryStart","QueryEnd","Dir","Target","TargetLength",
+                                                             "TargetStart","TargetEnd","MatchBases","MatchLength","MapQ"))
+d11 %>% filter(QueryStart > 17e6) %>% filter(MatchBases > 10000) %>% filter(Target == "NC_061060.1" ) %>% arrange(TargetStart)
+```
+
+
+(base) ➜  307 git:(main) ✗ cat ~/genomes/dsm/NC_061060.1.gff | awk '$4 > 11012569' | awk '$5 < 11688793' | grep "\tgene\t" | cut -f 9 | cut -f 1 -d';' | perl -pe 's/ID=gene-//g'
+csnk1a1
+LOC124466757
+fbxo38
+fgfrl1b
+LOC124467951
+LOC124471106
+hspa9
+LOC124468847
+LOC124468171
+LOC124470493
+LOC124470675
+LOC124468191
+LOC124468210
+LOC124467466
+LOC124480417
+LOC124480479

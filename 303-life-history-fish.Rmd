@@ -526,7 +526,7 @@ ggplot(obj2) +
   ylab("Frequency of Ancestral Form\n") +
   xlab("\nPhenotypic Class") +
   theme_bw() +
-  theme(panel.grid=element_blank()) +
+  #theme(panel.grid.major=element_blank()) +
   theme(axis.text=element_text(size=12)) +
   theme(axis.title=element_text(face="bold", size=16)) +
   scale_x_continuous(breaks=c(1,2,3), labels = c("LS","MS","HS"), limits = c(0.5,3.5))
@@ -534,7 +534,27 @@ ggplot(obj2) +
 ggsave("outputs/303/life-history-fish-chrom11.jpeg", width=8, height=6)
 ggsave("outputs/303/figure-5.jpeg", width=8, height=6)
 
+
+ggplot(obj2) +
+  geom_segment(aes(x=Step, xend=Step, y=Frequency-Error, yend=Frequency+Error)) +
+  geom_point(aes(x=Step, y=Frequency)) +
+  #geom_smooth(aes(x=Step, y=Frequency), method='lm') +
+  geom_text(aes(x=Step, y=Frequency+Error+0.02, label=paste0("n = ",N))) +
+  ylim(0,1.05) +
+  ylab("Frequency of Ancestral Form\n") +
+  xlab("\nPhenotypic Class") +
+  theme_bw() +
+  #theme(panel.grid.major=element_blank()) +
+  theme(axis.text=element_text(size=12)) +
+  theme(axis.title=element_text(face="bold", size=16)) +
+  scale_x_continuous(breaks=c(1,2,3), labels = c("LS","MS","HS"), limits = c(0.5,3.5)) +
+  theme(axis.text=element_text(face="bold",size=14)) 
+ggsave("outputs/303/figure-5-presentation.jpeg", width=8, height=6)
+
+  
 ```
+
+
 
 ```{r}
 l <- lm(Frequency ~ Step, data = obj2)
@@ -962,3 +982,7 @@ round(1-(0.95^60),3)
 
 round(1-(0.9^30),3)
 ```
+
+
+## Ok, let's get geographic plot
+

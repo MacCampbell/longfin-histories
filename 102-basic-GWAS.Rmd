@@ -30,7 +30,7 @@ m36 %>% select(Rand) %>% write_tsv(col_names=FALSE, file="bamlists/36.rand")
 
 removing -rf outputs/101/chrom-regions.txt and redoing 
 ```{sh, eval=FALSE}
- srun -p bigmemm -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
+ srun -p bml -t 2:00:00 --mem=24G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
  $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/36.pheno \
  -GL 1 -nThreads 12 -minInd 18 \
  -minMapQ 10 -minQ 20 -minMaf 0.05 \
@@ -38,7 +38,7 @@ removing -rf outputs/101/chrom-regions.txt and redoing
   -bam bamlists/36.bamlist > outputs/102/do-asso.out 2> outputs/102/do-asso.err &
 
 #randomized scores  
-srun -p bigmemm -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
+srun -p bml -t 2:00:00 --mem=24G --nodes=1 --ntasks-per-node=1 --cpus-per-task=12 \
  $HOME/angsd/angsd -P 12 -doAsso 1 -doPost 1 -yBin bamlists/36.rand \
  -GL 1 -nThreads 12 -minInd 18 \
  -minMapQ 10 -minQ 20 -minMaf 0.05 \
@@ -51,7 +51,7 @@ srun -p bigmemm -t 10:00:00 --mem=64G --nodes=1 --ntasks-per-node=1 --cpus-per-t
 
 
 ```{r}
-data<-read_tsv("outputs/102/do-asso.lrt0.gz")
+data<-read_tsv("outputs/102/do-asso.lrt0.gz") %>% filter(grepl("^NC",Chromosome))
 ```
 
 ```{r}
@@ -62,7 +62,7 @@ df <- data %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
   mutate(BHfdr = p.adjust(p, method = "BH")) %>%
     group_by(Chromosome) %>%
     mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
-    mutate(BHfdrchrom = p.adjust(p, method = "BH"))
+    mutate(BHfdrchrom = p.adjust(p, method = "BH")) %>% ungroup() %>% mutate(Location=1:n())
 
 dfs<-df %>% arrange(-LRT) %>% head(n=20)
 dfs
@@ -76,10 +76,10 @@ mycolors<-sample(mycolors)
 ```
 
 ```{r}
-ggplot(df %>% filter(Chromosome %in% unique(dfs$Chromosome))) +
-  geom_point(aes(x=Position, y=log10p, color=Chromosome), alpha=0.75, cex=0.5) +
- # geom_hline(yintercept = -log10(0.05/nrow(dddf)), col="black", linetype=2, alpha=0.5) +
-  geom_hline(yintercept= 4, col="black", linetype=1, alpha=0.5) +
+ggplot(df) +
+  geom_point(aes(x=Location, y=log10p, color=Chromosome), alpha=0.75, cex=0.5) +
+  geom_hline(yintercept = -log10(0.05/nrow(df)), col="black", linetype=2, alpha=0.5) +
+ # geom_hline(yintercept= 4, col="black", linetype=1, alpha=0.5) +
   theme_bw() +
 #  scale_x_continuous(breaks=chroms$Position, labels=chroms$Chromosome) +
   theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=8)) +
@@ -92,17 +92,17 @@ ggplot(df %>% filter(Chromosome %in% unique(dfs$Chromosome))) +
   ggtitle("HS vs LS") +
   theme(plot.title = element_text(hjust=0.5) ) +
   theme(plot.subtitle = element_text(hjust=0.5)) +
-  facet_wrap(.~Chromosome, ncol = 5, scales="free_x") +
+#  facet_wrap(.~Chromosome, ncol = 5, scales="free_x") +
   theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
 
-ggsave("outputs/102/longfin-HS-LS-dsm-genome.pdf")
+ggsave("outputs/102/longfin-HS-LS-dsm-genome.jpeg", width=8, height=3)
 ```
 
 ## random phenos
 
 74678 
 ```{r}
-data<-read_tsv("outputs/102/do-asso-rand.lrt0.gz")
+data<-read_tsv("outputs/102/do-asso-rand.lrt0.gz") %>% filter(grepl("^NC",Chromosome))
 ```
 
 ```{r}
@@ -111,26 +111,21 @@ df <- data %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
   mutate(p = dchisq(LRT, df=1)) %>%
   mutate(bonfer = p.adjust(p, method = "bonferroni")) %>% 
   mutate(BHfdr = p.adjust(p, method = "BH")) %>%
-  group_by(Chromosome) %>%
-  mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
-  mutate(BHfdrchrom = p.adjust(p, method = "BH"))
+    group_by(Chromosome) %>%
+    mutate(adjpchrom = p.adjust(p, method = "bonferroni")) %>%
+    mutate(BHfdrchrom = p.adjust(p, method = "BH")) %>% ungroup() %>% mutate(Location=1:n())
 
 dfs<-df %>% arrange(-LRT) %>% head(n=20)
 dfs
 ```
 
-```{r}
-nb.cols <- length(unique(df$Chromosome))
-mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(nb.cols)
-#randomize
-mycolors<-sample(mycolors)
-```
+
 
 ```{r}
-ggplot(df %>% filter(Chromosome %in% unique(dfs$Chromosome))) +
-  geom_point(aes(x=Position, y=log10p, color=Chromosome), alpha=0.75, cex=0.5) +
- # geom_hline(yintercept = -log10(0.05/nrow(dddf)), col="black", linetype=2, alpha=0.5) +
-  geom_hline(yintercept= 4, col="black", linetype=1, alpha=0.5) +
+ggplot(df) +
+  geom_point(aes(x=Location, y=log10p, color=Chromosome), alpha=0.75, cex=0.5) +
+  geom_hline(yintercept = -log10(0.05/nrow(df)), col="black", linetype=2, alpha=0.5) +
+ # geom_hline(yintercept= 4, col="black", linetype=1, alpha=0.5) +
   theme_bw() +
 #  scale_x_continuous(breaks=chroms$Position, labels=chroms$Chromosome) +
   theme(axis.text.x = element_text(angle=45, hjust = 1, face="bold", size=8)) +
@@ -140,11 +135,11 @@ ggplot(df %>% filter(Chromosome %in% unique(dfs$Chromosome))) +
   scale_color_manual(values=mycolors) +
   ylab("-log10(p)\n") +
   xlab("\nChromosome") +
-  ggtitle("HS vs LS") +
+  ggtitle("Randomized") +
   theme(plot.title = element_text(hjust=0.5) ) +
   theme(plot.subtitle = element_text(hjust=0.5)) +
-  facet_wrap(.~Chromosome, ncol = 5, scales="free_x") +
+#  facet_wrap(.~Chromosome, ncol = 5, scales="free_x") +
   theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
 
-ggsave("outputs/102/longfin-HS-LS-dsm-genome-rand.pdf")
+ggsave("outputs/102/longfin-HS-LS-dsm-genome-rand.jpeg", width=8, height=3)
 ```

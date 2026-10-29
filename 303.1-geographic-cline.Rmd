@@ -1,0 +1,98 @@
+---
+title: "303.1-geographic-cline"
+output: html_document
+date: "2026-09-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+library(tidyverse)
+
+```
+
+```{r}
+data<-read_tsv("outputs/303/trend.tsv") %>% mutate(Frequency=1-`Derived Form`) %>% mutate(Error=sqrt((Frequency*(1-Frequency))/(2*N ))) %>% mutate(NewError=ifelse(Error==0, Frequency-(3/(2*N)), Frequency))
+data
+```
+
+ggplot(obj2) +
+  geom_segment(aes(x=Step, xend=Step, y=Frequency-Error, yend=Frequency+Error)) +
+  geom_point(aes(x=Step, y=Frequency)) +
+  #geom_smooth(aes(x=Step, y=Frequency), method='lm') +
+  geom_text(aes(x=Step, y=Frequency+Error+0.02, label=paste0("n = ",N))) +
+  ylim(0,1.05) +
+  ylab("Frequency of Ancestral Form\n") +
+  xlab("\nPhenotypic Class") +
+  theme_bw() +
+  #theme(panel.grid.major=element_blank()) +
+  theme(axis.text=element_text(size=12)) +
+  theme(axis.title=element_text(face="bold", size=16)) +
+  scale_x_continuous(breaks=c(1,2,3), labels = c("LS","MS","HS"), limits = c(0.5,3.5))
+
+8 RR
+5 AR
+1+2+3+2+18=26
+
+(16+5)/52=0.40
+
+```{r}
+ggplot(data %>% filter(Location !="COLR")) +
+  geom_point(aes(x=Latitude, y=Frequency)) +
+  geom_segment(aes(x=Latitude, xend=Latitude, y=Frequency-Error, yend=Frequency+Error)) +
+    geom_segment(aes(x=Latitude, xend=Latitude, y=Frequency, yend=NewError)) +
+  geom_text(aes(x=Latitude, y=1.04, label=paste0("n = ",N)) ) +
+  theme_bw() +
+  ylab("Frequency of Ancestral Form\n") +
+  xlab("\nLatitude") +
+  theme(axis.title=element_text(face="bold",size=14)) +
+    theme(axis.text=element_text(face="bold",size=14)) +
+  ylim(0,1.05)
+ggsave("outputs/303/latitudinal-trend.jpeg")
+```
+
+
+
+
+```{r}
+theta <- seq(from = 0,
+             to = 12*pi, 
+             length.out = 100)
+
+sine <- tibble(x = theta,
+               y = sin((theta/1.5)*3)+1,
+               label = 1:length(theta),
+               type="Resident")
+
+sine2 <- tibble(x = theta+pi,
+               y = sin((theta)*4)+1,
+               label = 1:length(theta),
+               type= "Migratory")
+
+csine<-sine %>% left_join(sine2, by=c("label"="label")) %>% mutate(newx=(x.x+x.y)) %>% mutate(newy=(y.x+y.y)) %>% mutate(type="Combined")
+
+ggplot() +
+  geom_line(data=sine, aes(x=x,y=y, color=type), size = 1, alpha=0.5) +
+  geom_line(data=sine2, aes(x=x,y=y, color=type), size = 1, alpha=0.5) +
+  geom_line(data=csine, aes(x=newx,y=newy, color= type), size = 2) +
+  coord_cartesian(xlim=c(4*pi, 8*pi)) +
+  ylab("Population Size\n") +
+  xlab("\nTime") +
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  theme(axis.ticks = element_blank()) +
+  theme(axis.text = element_blank()) +
+  theme(axis.title = element_text(size=16, face="bold")) +
+  scale_color_manual(
+    name = "Population", # Changes the legend title
+    values = c("Combined" = "black", "Migratory" = "blue", "Resident" = "red") # Hex codes or color names
+  )
+  
+
+csine
+
+ggsave("outputs/303/pop-trend.jpeg")
+
+```

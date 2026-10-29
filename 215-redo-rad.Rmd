@@ -120,8 +120,11 @@ ggplot(tops) +
 tops %>% group_by(aggregated_new_classes, sex) %>% select(Dedup) %>% summarize_all(mean) %>% left_join(samplesize)
 ```
 
-
-
+```{r}
+tops %>% ggplot() +
+  geom_histogram(aes(x=`Fork Length`)) +
+  facet_wrap(aggregated_new_classes~SampleDate)
+```
 ## Generate Bamlists, Phenotype and Sex Files
 
 ```{r}
@@ -357,12 +360,22 @@ srun -t 24:00:00 -p bigmemm --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-t
  -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/215/asso-50 \
  -bam $HOME/longfin-histories/bamlists/2012.bamlist  > outputs/215/asso-50.out 2> outputs/215/asso-50.err &
  
+ 
+# How about for life history variation? 121 fish --account publicgrp -p low 
+srun -t 4:00:00 -p bml --mem=32G --nodes=1 --ntasks-per-node=1 --cpus-per-task=8 $HOME/angsd/angsd -P 8 \
+ -doAsso 1 -yBin $HOME/longfin-histories/phenos/2012.phenos -GL 1 -minInd 91 -minMaf 0.10 \
+ -minMapQ 20 -minQ 20 -rf meta/super-chroms.txt \
+ -doMajorMinor 1 -doMaf 1 -SNP_pval 1e-6 -out outputs/215/lh-asso-75 \
+ -bam $HOME/longfin-histories/bamlists/2012.bamlist  > outputs/215/lh-asso.out 2> outputs/215/lh-asso.err &
+#	-> Number of sites retained after filtering: 15423 
+
+
 ```
 
 Check on these:
 
 ```{r}
-df<-read_tsv(file="outputs/215/assoc05-75-2-nocov.lrt0.gz") %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
+df<-read_tsv(file="outputs/215/lh-asso-75.lrt0.gz") %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
   filter(log10p>=0 & log10p != "Inf") %>%
   mutate(p = dchisq(LRT, df=1)) %>%
   mutate(bonfer = p.adjust(p, method = "bonferroni")) %>% 
@@ -372,6 +385,9 @@ df<-read_tsv(file="outputs/215/assoc05-75-2-nocov.lrt0.gz") %>% mutate(log10p = 
   mutate(BHfdrchrom = p.adjust(p, method = "BH"))
 
 df %>% arrange(-LRT) %>% head(n=20)
+
+df %>% arrange(-LRT) %>% head(n=20) %>% write_csv("outputs/215/top-associations.csv")
+
 ```
 
 Calculate some significance threshold

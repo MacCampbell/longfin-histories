@@ -188,3 +188,20 @@ df <- data %>% mutate(log10p = -log10(dchisq(LRT, df = 1))) %>%
 
 df %>% arrange(-LRT) %>% head(n=20)
 ```
+
+
+```{r}
+ggplot(df %>% filter(Chromosome=="SUPER_10")) + geom_point(aes(x=Position, y=log10p, color=log10p), alpha=0.75, cex=0.7)+
+  geom_hline(yintercept = 6, lty=2, alpha=0.6) +
+  scale_color_gradient(low="grey",high="skyblue") +
+  theme_bw()+
+  theme(axis.text.x= element_text(angle=45,hjust=1)) +
+  theme(panel.grid = element_blank()) +
+  ylab("-log10(p)") +
+  ggtitle("Sex GWAS") +
+  facet_wrap(.~Chromosome, scales = "free_x") +
+  theme(plot.title = element_text(hjust=0.5))
+
+ggsave("outputs/213/super-10-gwas.jpeg")
+```
+

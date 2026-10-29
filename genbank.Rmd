@@ -1,0 +1,50 @@
+---
+title: "genbank"
+output: html_document
+date: "2026-07-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+Checking md5s
+
+```{r}
+mine<-read_tsv("genbank/md5sum.txt") %>% mutate(Type="Mine")
+gb<-read_tsv("genbank/gb-md5.tsv") %>% mutate(Type="Theirs")
+```
+
+```{r}
+gb %>% left_join(mine, by=c("md5"="md5", "file"="file"))
+
+```
+
+
+Sigh. Cleaning.
+
+module load seqtk
+
+seqkit seq -v input.fastq > cleaned_output.fastq
+
+gunzip -c original/LFS1363_R2.fastq.gz | tail
+
+zcat original/LFS1363_R2.fastq.gz | awk '{ pos = NR%4; if ( pos == 1) {h=$0} else if (pos == 2) {s=$0} else if (pos==3){c=$0} else if ( pos==0 ) {q=$0; if ( length(q) == length(s) ){printf("%s\n%s\n%s\n%s\n", h, s, c, q)}}}' | gzip -c > LFS1363_R2.fastq.gz
+
+check:
+gunzip -c original/LFS1363_R2.fastq.gz | wc
+1981175 2476470 179552256
+gunzip -c LFS1363_R2.fastq.gz | wc
+1981172 2476465 179551975
+
+Seems to work
+
+```{sh, eval=FALSE}
+for f in original/*.fastq.gz; do zcat $f | awk '{ pos = NR%4; if ( pos == 1) {h=$0} else if (pos == 2) {s=$0} else if (pos==3){c=$0} else if ( pos==0 ) {q=$0; if ( length(q) == length(s) ){printf("%s\n%s\n%s\n%s\n", h, s, c, q)}}}' | gzip -c > `basename $f`; done;
+```
+
+

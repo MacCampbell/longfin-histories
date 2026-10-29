@@ -74,6 +74,10 @@ sfb<-s72 %>% filter(Pop %in% c("ALVS","CHPI","SFBY","PETA","SUIB"))
 
 write_csv(sfb, file="meta/sfb.csv")
 
+sfb5k<-s116  %>% filter(Pop %in% c("ALVS","CHPI","SFBY","PETA","SUIB"))
+
+write_csv(sfb5k, file="meta/sfb5k.csv")
+
 ```
 
 ```{sh, eval=FALSE}
@@ -1157,3 +1161,32 @@ ggsave("outputs/300/figure-3.jpeg", width=11, height=8.5)
 
 ```
   
+
+
+## Extract SFE bits
+
+s72
+```{r}
+d72<-snps@sample.meta
+d72$names<-snps@names
+d72$ID<-s72$ID
+d72$Pop<-s72$Pop
+
+dsan<-d72 %>% filter(Pop %in% c("ALVS","CHPI","HUMB","PETA","SFBY"))
+dsan
+```
+
+```{r}
+
+
+ggplot(ho$sample %>% filter(.sample.id %in% dsan$.sample.id)) +
+  geom_boxplot(aes(x=NewGeno, y=hs, fill=NewGeno), alpha=0.85) +
+  ylab("Mean Heterozygosity") +
+  xlab("Candidate Chromosomal Inversion Genotype") +
+  theme_bw() +
+  theme(panel.grid=element_blank()) +
+  scale_fill_viridis_d(option="cividis", name ="Candidate CI\n Genotype") +
+  theme(plot.title = element_text(hjust=0, size=16, face="bold")) 
+
+
+```
